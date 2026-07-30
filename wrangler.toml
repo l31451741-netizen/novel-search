@@ -1,0 +1,8 @@
+name = "novel-search"
+compatibility_date = "2024-09-01"
+pages_build_output_dir = "."
+
+[[d1_databases]]
+binding = "DB"
+database_name = "novel-search-db"
+database_id = "4465be82-50ae-45c4-89b6-908bca2d72e3"

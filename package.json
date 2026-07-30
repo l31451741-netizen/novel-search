@@ -1,0 +1,17 @@
+{
+  "name": "novel-search",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npx esbuild _worker.src.js --bundle --format=esm --platform=browser --outfile=_worker.js --external:cloudflare:workers",
+    "dev": "npm run build && npx wrangler pages dev . --local",
+    "deploy": "npm run build && npx wrangler pages deploy ."
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}
