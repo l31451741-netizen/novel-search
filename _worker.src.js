@@ -30,12 +30,12 @@ app.get('/api/search', async (c) => {
     ).bind(ftsQuery).first();
     total = countRes?.c || 0;
   } else if (tab === 'hot') {
-    // 热门：按热度值排序
+    // 热门：只展示设过热度值的书，按热度排序
     rows = await db.prepare(
       `SELECT id, title, author, description, drive_links, tags, created_at
-       FROM novels ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
+       FROM novels WHERE view_count > 0 ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM novels`).first())?.c || 0;
+    total = (await db.prepare(`SELECT count(*) as c FROM novels WHERE view_count > 0`).first())?.c || 0;
   } else if (tab === 'featured') {
     // 精选：只展示标记的
     rows = await db.prepare(

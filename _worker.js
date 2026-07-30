@@ -2125,9 +2125,9 @@ app.get("/api/search", async (c) => {
   } else if (tab === "hot") {
     rows = await db.prepare(
       `SELECT id, title, author, description, drive_links, tags, created_at
-       FROM novels ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
+       FROM novels WHERE view_count > 0 ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM novels`).first())?.c || 0;
+    total = (await db.prepare(`SELECT count(*) as c FROM novels WHERE view_count > 0`).first())?.c || 0;
   } else if (tab === "featured") {
     rows = await db.prepare(
       `SELECT id, title, author, description, drive_links, tags, created_at
