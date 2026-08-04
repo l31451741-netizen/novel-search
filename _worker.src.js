@@ -2,142 +2,126 @@ import { Hono } from 'hono';
 
 const app = new Hono();
 
-// 首页
+// Helper: safe JSON parse
+function safeParse(str, fallback) {
+  try { return JSON.parse(str); } catch { return fallback; }
+}
+
+// Serve inline index HTML
 app.get('/', (c) => c.html(INDEX_HTML));
 
-// 搜索小说
+// /api/search with authors pagination and filtering
 app.get('/api/search', async (c) => {
   const q = (c.req.query('q') || '').trim();
   const tab = c.req.query('tab') || 'latest';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
-  const limit = 10;
-  const offset = (page - 1) * limit;
-
   const db = c.env.DB;
-  let rows, total;
+
+  // defaults
+  const defaultLimit = 10;
+  let limit = defaultLimit;
+  let offset = (page - 1) * limit;
 
   if (q) {
-    // 关键词搜索（FTS5，忽略 tab）
-    const ftsQuery = q.split(/\s+/).filter(Boolean).map(s => `"${s}"`).join(' ');
-    rows = await db.prepare(
-      `SELECT n.id, n.title, n.author, n.description, n.drive_links, n.tags, n.created_at
-       FROM novels_fts f JOIN novels n ON n.id = f.rowid
-       WHERE novels_fts MATCH ?
-       ORDER BY rank LIMIT ? OFFSET ?`
-    ).bind(ftsQuery, limit, offset).all();
-    const countRes = await db.prepare(
-      `SELECT count(*) as c FROM novels_fts WHERE novels_fts MATCH ?`
-    ).bind(ftsQuery).first();
-    total = countRes?.c || 0;
-  } else if (tab === 'hot') {
-    // 热门：只展示设过热度值的书，按热度排序
-    rows = await db.prepare(
+    const tokens = q.split(/\s+/).filter(Boolean);
+    const ftsQuery = tokens.map(s => `"${s.replace(/"/g,'') }"`).join(' ');
+    try {
+      const rows = await db.prepare(
+        `SELECT n.id, n.title, n.author, n.description, n.drive_links, n.tags, n.created_at
+         FROM novels_fts f JOIN novels n ON n.id = f.rowid
+         WHERE novels_fts MATCH ?
+         ORDER BY rank LIMIT ? OFFSET ?`
+      ).bind(ftsQuery, limit, offset).all();
+      const cnt = await db.prepare(`SELECT count(*) as c FROM novels_fts WHERE novels_fts MATCH ?`).bind(ftsQuery).first();
+      const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+      return c.json({ results, total: cnt?.c || 0, page, limit });
+    } catch (e) {
+      return c.json({ results: [], total: 0, page, limit });
+    }
+  }
+
+  if (tab === 'hot') {
+    const rows = await db.prepare(
       `SELECT id, title, author, description, drive_links, tags, created_at
        FROM novels WHERE view_count > 0 ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM novels WHERE view_count > 0`).first())?.c || 0;
-  } else if (tab === 'featured') {
-    // 精选：只展示标记的
-    rows = await db.prepare(
+    const cnt = await db.prepare(`SELECT count(*) as c FROM novels WHERE view_count > 0`).first();
+    const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+    return c.json({ results, total: cnt?.c || 0, page, limit });
+  }
+
+  if (tab === 'featured') {
+    const rows = await db.prepare(
       `SELECT id, title, author, description, drive_links, tags, created_at
        FROM novels WHERE is_featured = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM novels WHERE is_featured = 1`).first())?.c || 0;
-  } else if (tab === 'authors') {
-    // 作者合集：按作者聚合，返回每位作者和其最新的若干作品（最多3本）
-    // 使用 limit/offset 作用于作者列表
+    const cnt = await db.prepare(`SELECT count(*) as c FROM novels WHERE is_featured = 1`).first();
+    const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+    return c.json({ results, total: cnt?.c || 0, page, limit });
+  }
+
+  if (tab === 'authors') {
+    // server-side authors pagination: 5 authors per page, filter out unknown and "精选集合"
+    const authorsLimit = 5;
+    const authorsOffset = (page - 1) * authorsLimit;
     const authorsRows = await db.prepare(
-      `SELECT author, count(*) as c FROM novels WHERE author IS NOT NULL AND author != '' GROUP BY author ORDER BY c DESC LIMIT ? OFFSET ?`
-    ).bind(limit, offset).all();
+      `SELECT author, count(*) as c FROM novels
+       WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选集合'
+       GROUP BY author ORDER BY c DESC LIMIT ? OFFSET ?`
+    ).bind(authorsLimit, authorsOffset).all();
     const authorsList = (authorsRows.results || []);
     const resultsArr = [];
     for (const a of authorsList) {
       const novelsRes = await db.prepare(
-        `SELECT id, title, drive_links, created_at FROM novels WHERE author = ? ORDER BY created_at DESC LIMIT 3`
+        `SELECT id, title, drive_links, created_at FROM novels WHERE author = ? ORDER BY created_at DESC LIMIT 100`
       ).bind(a.author).all();
-      const novels = (novelsRes.results || []).map(n => ({
-        id: n.id,
-        title: n.title,
-        drive_links: safeParse(n.drive_links, []),
-        created_at: n.created_at
-      }));
+      const novels = (novelsRes.results || []).map(n => ({ id: n.id, title: n.title, drive_links: safeParse(n.drive_links, []), created_at: n.created_at }));
       resultsArr.push({ author: a.author, count: a.c, novels });
     }
-    const totalAuthors = (await db.prepare(`SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != ''`).first())?.c || 0;
-    return c.json({ results: resultsArr, total: totalAuthors, page, limit });
-  } else {
-    // 最新：按时间排序
-    rows = await db.prepare(
-      `SELECT id, title, author, description, drive_links, tags, created_at
-       FROM novels ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM novels`).first())?.c || 0;
+    const totalAuthors = (await db.prepare(`SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选集合'`).first())?.c || 0;
+    return c.json({ results: resultsArr, total: totalAuthors, page, limit: authorsLimit });
   }
 
-  const results = (rows.results || []).map(r => ({
-    ...r,
-    drive_links: safeParse(r.drive_links, []),
-    tags: r.tags ? r.tags.split(',').map(t => t.trim()).filter(Boolean) : [],
-  }));
-
-  return c.json({ results, total, page, limit });
+  // default: latest
+  const rows = await db.prepare(
+    `SELECT id, title, author, description, drive_links, tags, created_at
+     FROM novels ORDER BY created_at DESC LIMIT ? OFFSET ?`
+  ).bind(limit, offset).all();
+  const cnt = await db.prepare(`SELECT count(*) as c FROM novels`).first();
+  const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+  return c.json({ results, total: cnt?.c || 0, page, limit });
 });
 
-// 留言列表
+// messages endpoints
 app.get('/api/messages', async (c) => {
   const status = c.req.query('status') || '';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
   const limit = 20;
   const offset = (page - 1) * limit;
-
   const db = c.env.DB;
-  let rows, total;
-
+  let rows;
   if (status && status !== 'all') {
-    rows = await db.prepare(
-      `SELECT id, novel_name, note, status, created_at
-       FROM messages WHERE status = ?
-       ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).bind(status, limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM messages WHERE status = ?`).bind(status).first())?.c || 0;
-  } else {
-    rows = await db.prepare(
-      `SELECT id, novel_name, note, status, created_at
-       FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).bind(limit, offset).all();
-    total = (await db.prepare(`SELECT count(*) as c FROM messages`).first())?.c || 0;
+    rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(status, limit, offset).all();
+    const cnt = await db.prepare(`SELECT count(*) as c FROM messages WHERE status = ?`).bind(status).first();
+    return c.json({ results: rows.results || [], total: cnt?.c || 0, page, limit });
   }
-
-  return c.json({ results: rows.results || [], total, page, limit });
+  rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(limit, offset).all();
+  const cnt = await db.prepare(`SELECT count(*) as c FROM messages`).first();
+  return c.json({ results: rows.results || [], total: cnt?.c || 0, page, limit });
 });
 
-// 提交留言
 app.post('/api/messages', async (c) => {
   let body;
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: '请求格式错误' }, 400);
-  }
-
+  try { body = await c.req.json(); } catch { return c.json({ error: 'invalid json' }, 400); }
   const name = (body.novel_name || '').trim();
-  const note = (body.note || '').trim().slice(0, 500);
-
+  const note = (body.note || '').trim().slice(0, 1000);
   if (!name) return c.json({ error: '请填写小说名称' }, 400);
-  if (name.length > 200) return c.json({ error: '名称过长' }, 400);
-
   const db = c.env.DB;
-  await db.prepare(
-    `INSERT INTO messages (novel_name, note, status) VALUES (?, ?, 'pending')`
-  ).bind(name, note).run();
-
+  await db.prepare(`INSERT INTO messages (novel_name, note, status, created_at) VALUES (?, ?, 'pending', datetime('now'))`).bind(name, note).run();
   return c.json({ ok: true });
 });
 
-function safeParse(str, fallback) {
-  try { return JSON.parse(str); } catch { return fallback; }
-}
-
+// Inline front-end (copied from index.html)
 const INDEX_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -173,10 +157,13 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .result-tags span{font-size:.7rem;color:#c97b8a;background:#faf0f2;padding:1px 7px;border-radius:10px}
 .result-desc{color:#888;font-size:.85rem;margin-bottom:10px}
 .result-links{display:flex;flex-wrap:wrap;gap:6px}
-.result-links a{font-size:.78rem;color:#7a6a6a;text-decoration:none;padding:3px 10px;background:#f7f2f0;border-radius:3px;transition:all .15s}
+.result-links a{font-size:.78rem;color:#7a6a6a;text-decoration:none;padding:4px 10px;background:#f7f2f0;border-radius:10px;transition:all .15s;display:inline-block}
 .result-links a:hover{background:#c97b8a;color:#fff}
 .result-links a code{font-family:inherit;font-size:.72rem;color:#cbb;margin-left:4px}
 .result-links a:hover code{color:#f0d8dd}
+.expand-btn{margin-left:12px;background:transparent;border:1px solid #e6d6d3;color:#7a6a6a;padding:6px 10px;border-radius:10px;cursor:pointer;font-size:.85rem}
+.author-card .result-desc{margin-top:10px}
+.book-item{margin-bottom:8px}
 .empty{text-align:center;color:#ccc;padding:40px 0;font-size:.9rem}
 .loading{text-align:center;padding:20px;color:#ccc;font-size:.85rem}
 
@@ -231,8 +218,8 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="tabs" id="tabs">
     <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
     <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
-    <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
     <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
+    <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
     <div class="tab-indicator" id="indicator"></div>
   </div>
 
@@ -269,6 +256,13 @@ let curTab='hot';
 let curPage=1;
 let curFilter='all';
 
+// Authors UI state
+let authorsData = []; // current page of authors from server
+let authorsTotal = 0; // total authors (from server)
+let authorsLimit = 5; // server page size for authors
+const defaultShownBooks = 3; // default books per author
+const expandedAuthors = new Set(); // track expanded author keys
+
 // === 小说列表加载 ===
 async function loadNovels(){
   const q=document.getElementById('q').value.trim();
@@ -277,9 +271,42 @@ async function loadNovels(){
   list.innerHTML='<div class="loading">加载中...</div>';
   pag.innerHTML='';
   try{
-    const url=q
-      ?'/api/search?q='+encodeURIComponent(q)+'&page='+curPage
-      :'/api/search?tab='+curTab+'&page='+curPage;
+    if(q){
+      // keyword search
+      const url='/api/search?q='+encodeURIComponent(q)+'&page='+curPage;
+      const r=await fetch(url);
+      const d=await r.json();
+      if(!d.results.length){list.innerHTML='<div class="empty">没有找到相关小说</div>';return}
+      list.innerHTML=d.results.map(n=>renderNovel(n)).join('');
+      renderPagination(d.total,d.page,d.limit);
+      return;
+    }
+
+    if(curTab === 'authors'){
+      // request server-paginated authors (server returns 5 authors per page)
+      const url = '/api/search?tab=authors&page='+curPage;
+      const r = await fetch(url);
+      const d = await r.json();
+      const raw = d.results || [];
+      // frontend safety-filter: exclude empty, '未知', '精选集合' and names containing '合集'
+      const filtered = raw.filter(a => {
+        const name = (a.author || '').trim();
+        if(!name) return false;
+        const lower = name.toLowerCase().replace(/\s+/g,'');
+        const bad = ['未知','精选集合','无','null','undefined'].map(x=>x.toLowerCase());
+        if(bad.includes(lower)) return false;
+        if(name.includes('合集')) return false;
+        return true;
+      });
+      authorsData = filtered;
+      authorsTotal = d.total || 0;
+      authorsLimit = d.limit || 5;
+      renderAuthorsPage(curPage);
+      return;
+    }
+
+    // regular tabs
+    const url='/api/search?tab='+curTab+'&page='+curPage;
     const r=await fetch(url);
     const d=await r.json();
     if(!d.results.length){list.innerHTML='<div class="empty">没有找到相关小说</div>';return}
@@ -288,20 +315,61 @@ async function loadNovels(){
   }catch(e){list.innerHTML='<div class="empty">加载失败，请重试</div>'}
 }
 
-function renderNovel(n){
-  // 作者合集条目
-  if(n.novels && Array.isArray(n.novels)){
-    const books = n.novels.map(b=>{
+function renderAuthorCard(a){
+  const key = 'author_' + encodeURIComponent(a.author || '');
+  const isExpanded = expandedAuthors.has(key);
+  const books = a.novels || [];
+  const showCount = isExpanded ? books.length : Math.min(defaultShownBooks, books.length);
+  let booksHtml = '';
+  for(let i=0;i<showCount;i++){
+    const b = books[i];
+    const links = (b.drive_links||[]).map(l=>'<a href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+(l.code?'<code>'+esc(l.code)+'</code>':'')+'</a>').join('');
+    booksHtml += '<div class="book-item"><strong>'+esc(b.title)+'</strong><div class="result-links" style="margin-top:6px">'+links+'</div></div>';
+  }
+  // if expanded and there are more books that were not shown previously, show them
+  if(isExpanded && books.length > showCount){
+    for(let i=showCount;i<books.length;i++){
+      const b = books[i];
       const links = (b.drive_links||[]).map(l=>'<a href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+(l.code?'<code>'+esc(l.code)+'</code>':'')+'</a>').join('');
-      return '<div style="margin-bottom:8px"><strong>'+esc(b.title)+'</strong>'+(b.created_at?'<span style="color:#ccc;margin-left:8px;font-size:.82rem">'+esc((b.created_at||'').slice(0,10))+'</span>':'')+'<div style="margin-top:6px">'+links+'</div></div>';
-    }).join('');
-    return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.author)+'</span><span class="result-author">'+(n.count||0)+' 本</span></div><div class="result-desc">'+books+'</div></div>';
+      booksHtml += '<div class="book-item"><strong>'+esc(b.title)+'</strong><div class="result-links" style="margin-top:6px">'+links+'</div></div>';
+    }
   }
 
+  const toggleBtn = books.length > defaultShownBooks ? ('<button class="expand-btn" onclick="toggleAuthor(\''+key+'\')">'+(isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）')+'</button>') : '';
+  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div></div>';
+}
+
+function renderAuthorsPage(page){
+  const list=document.getElementById('resultList');
+  const pag=document.getElementById('pagination');
+  const total = authorsTotal || authorsData.length;
+  const limit = authorsLimit || authorsPerPage;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if(page < 1) page = 1; if(page > pages) page = pages;
+  curPage = page;
+  if(!authorsData || authorsData.length===0){ list.innerHTML = '<div class="empty">暂无作者</div>'; pag.innerHTML=''; return }
+  // authorsData already contains current page from server
+  list.innerHTML = authorsData.map(a=>renderAuthorCard(a)).join('');
+  // render simple pagination for authors using server totals
+  let html = '';
+  html += '<button '+(page<=1?'disabled':'')+' onclick="goPage('+(page-1)+')">上一页</button>';
+  html += '<span style="padding:6px 12px;color:#7a6a6a">第 '+page+' / '+pages+' 页</span>';
+  html += '<button '+(page>=pages?'disabled':'')+' onclick="goPage('+(page+1)+')">下一页</button>';
+  pag.innerHTML = html;
+}
+
+function toggleAuthor(key){
+  if(expandedAuthors.has(key)) expandedAuthors.delete(key); else expandedAuthors.add(key);
+  // re-render same page to reflect expansion
+  renderAuthorsPage(curPage);
+}
+
+function renderNovel(n){
+  // keep original novel rendering (for non-authors tabs)
   const tags=(n.tags||[]).map(t=>'<span>'+esc(t)+'</span>').join('');
   const links=(n.drive_links||[]).map(l=>{
     const code=l.code?'<code>'+esc(l.code)+'</code>':'';
-    return '<a href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+code+'</a>';
+    return '<a class="page-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+code+'</a>';
   }).join('');
   return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div></div>';
 }
@@ -326,7 +394,11 @@ function renderPagination(total,page,limit){
 
 function goPage(p){
   curPage=p;
-  loadNovels();
+  if(curTab==='authors'){
+    renderAuthorsPage(curPage);
+  }else{
+    loadNovels();
+  }
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -406,6 +478,6 @@ window.addEventListener('resize',function(){
 });
 </script>
 </body>
-</html>`;
-
+</html>`
+ 
 export default app;
