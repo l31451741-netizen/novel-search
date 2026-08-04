@@ -26,13 +26,14 @@ app.get('/api/search', async (c) => {
     const tokens = q.split(/\s+/).filter(Boolean);
     const ftsQuery = tokens.map(s => `"${s.replace(/"/g,'') }"`).join(' ');
     try {
+      // Use FTS table alias and order by novel creation time (rank may not exist)
       const rows = await db.prepare(
         `SELECT n.id, n.title, n.author, n.description, n.drive_links, n.tags, n.created_at
          FROM novels_fts f JOIN novels n ON n.id = f.rowid
-         WHERE novels_fts MATCH ?
-         ORDER BY rank LIMIT ? OFFSET ?`
+         WHERE f MATCH ?
+         ORDER BY n.created_at DESC LIMIT ? OFFSET ?`
       ).bind(ftsQuery, limit, offset).all();
-      const cnt = await db.prepare(`SELECT count(*) as c FROM novels_fts WHERE novels_fts MATCH ?`).bind(ftsQuery).first();
+      const cnt = await db.prepare(`SELECT count(*) as c FROM novels_fts f WHERE f MATCH ?`).bind(ftsQuery).first();
       const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
       return c.json({ results, total: cnt?.c || 0, page, limit });
     } catch (e) {
@@ -343,7 +344,7 @@ function renderAuthorsPage(page){
   const list=document.getElementById('resultList');
   const pag=document.getElementById('pagination');
   const total = authorsTotal || authorsData.length;
-  const limit = authorsLimit || authorsPerPage;
+  const limit = (typeof authorsLimit === 'number' && authorsLimit > 0) ? authorsLimit : 5;
   const pages = Math.max(1, Math.ceil(total / limit));
   if(page < 1) page = 1; if(page > pages) page = pages;
   curPage = page;
@@ -479,5 +480,5 @@ window.addEventListener('resize',function(){
 </script>
 </body>
 </html>`
- 
+
 export default app;
