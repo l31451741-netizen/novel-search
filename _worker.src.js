@@ -231,8 +231,8 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="tabs" id="tabs">
     <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
     <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
-    <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
     <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
+    <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
     <div class="tab-indicator" id="indicator"></div>
   </div>
 
