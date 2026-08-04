@@ -5,4 +5,4 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"
 database_name = "novel-search-db"
-database_id = "4465be82-50ae-45c4-89b6-908bca2d72e3"
+database_id = "4b702223-a213-4db3-9365-4b31b6fef0d0"
