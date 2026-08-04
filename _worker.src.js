@@ -43,6 +43,28 @@ app.get('/api/search', async (c) => {
        FROM novels WHERE is_featured = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`
     ).bind(limit, offset).all();
     total = (await db.prepare(`SELECT count(*) as c FROM novels WHERE is_featured = 1`).first())?.c || 0;
+  } else if (tab === 'authors') {
+    // 作者合集：按作者聚合，返回每位作者和其最新的若干作品（最多3本）
+    // 使用 limit/offset 作用于作者列表
+    const authorsRows = await db.prepare(
+      `SELECT author, count(*) as c FROM novels WHERE author IS NOT NULL AND author != '' GROUP BY author ORDER BY c DESC LIMIT ? OFFSET ?`
+    ).bind(limit, offset).all();
+    const authorsList = (authorsRows.results || []);
+    const resultsArr = [];
+    for (const a of authorsList) {
+      const novelsRes = await db.prepare(
+        `SELECT id, title, drive_links, created_at FROM novels WHERE author = ? ORDER BY created_at DESC LIMIT 3`
+      ).bind(a.author).all();
+      const novels = (novelsRes.results || []).map(n => ({
+        id: n.id,
+        title: n.title,
+        drive_links: safeParse(n.drive_links, []),
+        created_at: n.created_at
+      }));
+      resultsArr.push({ author: a.author, count: a.c, novels });
+    }
+    const totalAuthors = (await db.prepare(`SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != ''`).first())?.c || 0;
+    return c.json({ results: resultsArr, total: totalAuthors, page, limit });
   } else {
     // 最新：按时间排序
     rows = await db.prepare(
@@ -209,6 +231,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="tabs" id="tabs">
     <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
     <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
+    <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
     <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
     <div class="tab-indicator" id="indicator"></div>
   </div>
@@ -266,6 +289,15 @@ async function loadNovels(){
 }
 
 function renderNovel(n){
+  // 作者合集条目
+  if(n.novels && Array.isArray(n.novels)){
+    const books = n.novels.map(b=>{
+      const links = (b.drive_links||[]).map(l=>'<a href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+(l.code?'<code>'+esc(l.code)+'</code>':'')+'</a>').join('');
+      return '<div style="margin-bottom:8px"><strong>'+esc(b.title)+'</strong>'+(b.created_at?'<span style="color:#ccc;margin-left:8px;font-size:.82rem">'+esc((b.created_at||'').slice(0,10))+'</span>':'')+'<div style="margin-top:6px">'+links+'</div></div>';
+    }).join('');
+    return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.author)+'</span><span class="result-author">'+(n.count||0)+' 本</span></div><div class="result-desc">'+books+'</div></div>';
+  }
+
   const tags=(n.tags||[]).map(t=>'<span>'+esc(t)+'</span>').join('');
   const links=(n.drive_links||[]).map(l=>{
     const code=l.code?'<code>'+esc(l.code)+'</code>':'';
