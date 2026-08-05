@@ -2,30 +2,24 @@ import { Hono } from 'hono';
 
 const app = new Hono();
 
-// Helper: safe JSON parse
 function safeParse(str, fallback) {
   try { return JSON.parse(str); } catch { return fallback; }
 }
 
-// Serve inline index HTML
 app.get('/', (c) => c.html(INDEX_HTML));
 
-// /api/search with authors pagination and filtering
 app.get('/api/search', async (c) => {
   const q = (c.req.query('q') || '').trim();
   const tab = c.req.query('tab') || 'latest';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
   const db = c.env.DB;
+  const limit = 10;
+  const offset = (page - 1) * limit;
 
-  // defaults
-  const defaultLimit = 10;
-  let limit = defaultLimit;
-  let offset = (page - 1) * limit;
-
-  if (q) {
-    const tokens = q.split(/\s+/).filter(Boolean);
-    const ftsQuery = tokens.map(s => `"${s.replace(/"/g,'') }"`).join(' ');
-    try {
+  try {
+    if (q) {
+      const tokens = q.split(/\s+/).filter(Boolean);
+      const ftsQuery = tokens.map(s => `"${s.replace(/"/g,'') }"`).join(' ');
       const rows = await db.prepare(
         `SELECT n.id, n.title, n.author, n.description, n.drive_links, n.tags, n.created_at
          FROM novels_fts f JOIN novels n ON n.id = f.rowid
@@ -35,36 +29,11 @@ app.get('/api/search', async (c) => {
       const cnt = await db.prepare(`SELECT count(*) as c FROM novels_fts f WHERE f MATCH ?`).bind(ftsQuery).first();
       const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
       return c.json({ results, total: cnt?.c || 0, page, limit });
-    } catch (e) {
-      return c.json({ results: [], total: 0, page, limit });
     }
-  }
 
-  if (tab === 'hot') {
-    const rows = await db.prepare(
-      `SELECT id, title, author, description, drive_links, tags, created_at
-       FROM novels WHERE view_count > 0 ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`
-    ).bind(limit, offset).all();
-    const cnt = await db.prepare(`SELECT count(*) as c FROM novels WHERE view_count > 0`).first();
-    const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
-    return c.json({ results, total: cnt?.c || 0, page, limit });
-  }
-
-  if (tab === 'featured') {
-    const rows = await db.prepare(
-      `SELECT id, title, author, description, drive_links, tags, created_at
-       FROM novels WHERE is_featured = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`
-    ).bind(limit, offset).all();
-    const cnt = await db.prepare(`SELECT count(*) as c FROM novels WHERE is_featured = 1`).first();
-    const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
-    return c.json({ results, total: cnt?.c || 0, page, limit });
-  }
-
-  if (tab === 'authors') {
-    try {
+    if (tab === 'authors') {
       const authorsLimit = 5;
       const authorsOffset = (page - 1) * authorsLimit;
-      // 严格过滤未知、空以及精选集合
       const authorsRows = await db.prepare(
         `SELECT author, count(*) as c FROM novels
          WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选集合'
@@ -89,37 +58,50 @@ app.get('/api/search', async (c) => {
       ).first())?.c || 0;
       
       return c.json({ results: resultsArr, total: totalAuthors, page, limit: authorsLimit });
-    } catch (err) {
-      return c.json({ results: [], total: 0, page, limit: 5 });
     }
-  }
 
-  // default: latest
-  const rows = await db.prepare(
-    `SELECT id, title, author, description, drive_links, tags, created_at
-     FROM novels ORDER BY created_at DESC LIMIT ? OFFSET ?`
-  ).bind(limit, offset).all();
-  const cnt = await db.prepare(`SELECT count(*) as c FROM novels`).first();
-  const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
-  return c.json({ results, total: cnt?.c || 0, page, limit });
+    let sql = `SELECT id, title, author, description, drive_links, tags, created_at FROM novels`;
+    let countSql = `SELECT count(*) as c FROM novels`;
+    let bindArgs = [limit, offset];
+
+    if (tab === 'hot') {
+      sql += ` WHERE view_count > 0 ORDER BY view_count DESC, created_at DESC LIMIT ? OFFSET ?`;
+      countSql += ` WHERE view_count > 0`;
+    } else if (tab === 'featured') {
+      sql += ` WHERE is_featured = 1 ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      countSql += ` WHERE is_featured = 1`;
+    } else {
+      sql += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+    }
+
+    const rows = await db.prepare(sql).bind(...bindArgs).all();
+    const cnt = await db.prepare(countSql).first();
+    const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+    return c.json({ results, total: cnt?.c || 0, page, limit });
+  } catch (err) {
+    return c.json({ results: [], total: 0, page, limit, error: err.message });
+  }
 });
 
-// messages endpoints
 app.get('/api/messages', async (c) => {
   const status = c.req.query('status') || '';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
   const limit = 20;
   const offset = (page - 1) * limit;
   const db = c.env.DB;
-  let rows;
-  if (status && status !== 'all') {
-    rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(status, limit, offset).all();
-    const cnt = await db.prepare(`SELECT count(*) as c FROM messages WHERE status = ?`).bind(status).first();
+  try {
+    let rows, cnt;
+    if (status && status !== 'all') {
+      rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages WHERE status = ? ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(status, limit, offset).all();
+      cnt = await db.prepare(`SELECT count(*) as c FROM messages WHERE status = ?`).bind(status).first();
+    } else {
+      rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(limit, offset).all();
+      cnt = await db.prepare(`SELECT count(*) as c FROM messages`).first();
+    }
     return c.json({ results: rows.results || [], total: cnt?.c || 0, page, limit });
+  } catch (e) {
+    return c.json({ results: [], total: 0, page, limit });
   }
-  rows = await db.prepare(`SELECT id, novel_name, note, status, created_at FROM messages ORDER BY created_at DESC LIMIT ? OFFSET ?`).bind(limit, offset).all();
-  const cnt = await db.prepare(`SELECT count(*) as c FROM messages`).first();
-  return c.json({ results: rows.results || [], total: cnt?.c || 0, page, limit });
 });
 
 app.post('/api/messages', async (c) => {
@@ -133,7 +115,6 @@ app.post('/api/messages', async (c) => {
   return c.json({ ok: true });
 });
 
-// Inline front-end
 const INDEX_HTML = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -150,18 +131,13 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .search input{flex:1;border:none;padding:11px 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#4a4a4a}
 .search button{padding:11px 22px;border:none;background:#c97b8a;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:2px;transition:background .15s}
 .search button:hover{background:#b86675}
-
-/* Tab 栏 */
 .tabs{display:flex;gap:0;margin-bottom:18px;position:relative;border-bottom:1px solid #e0d5d0}
 .tab-btn{padding:10px 22px;border:none;background:transparent;color:#b09a95;font-size:.88rem;cursor:pointer;font-family:inherit;position:relative;transition:color .25s ease;letter-spacing:1px}
 .tab-btn:hover{color:#c97b8a}
 .tab-btn.active{color:#c97b8a;font-weight:600}
 .tab-indicator{position:absolute;bottom:-1px;height:2px;background:#c97b8a;border-radius:1px;transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}
-
-/* 结果列表 */
 .result-list{display:flex;flex-direction:column;min-height:200px}
-.result-item{padding:18px 16px;background:#fff;border-radius:4px;margin-bottom:10px;border:1px solid #f0e8e5;animation:fadeUp .3s ease}
-@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.result-item{padding:18px 16px;background:#fff;border-radius:4px;margin-bottom:10px;border:1px solid #f0e8e5}
 .result-head{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
 .result-title{font-size:1.02rem;font-weight:600;color:#5a4a4a}
 .result-author{font-size:.8rem;color:#b09a95}
@@ -172,50 +148,41 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .result-links a{font-size:.78rem;color:#7a6a6a;text-decoration:none;padding:4px 10px;background:#f7f2f0;border-radius:10px;transition:all .15s;display:inline-block}
 .result-links a:hover{background:#c97b8a;color:#fff}
 .result-links a code{font-family:inherit;font-size:.72rem;color:#cbb;margin-left:4px}
-.result-links a:hover code{color:#f0d8dd}
-.expand-btn{margin-left:auto;background:transparent;border:1px solid #e6d6d3;color:#7a6a6a;padding:3px 10px;border-radius:10px;cursor:pointer;font-size:.78rem;transition:all .15s}
+.expand-btn{margin-left:auto;background:transparent;border:1px solid #e6d6d3;color:#7a6a6a;padding:3px 10px;border-radius:10px;cursor:pointer;font-size:.78rem}
 .expand-btn:hover{background:#faf0f2;color:#c97b8a;border-color:#c97b8a}
 .author-card .result-desc{margin-top:8px}
 .book-item{margin-bottom:6px;display:flex;flex-direction:column;gap:2px}
 .book-title{font-size:.92rem;color:#5a4a4a;font-weight:500}
 .empty{text-align:center;color:#ccc;padding:40px 0;font-size:.9rem}
 .loading{text-align:center;padding:20px;color:#ccc;font-size:.85rem}
-
-/* 分页 */
 .pagination{display:flex;justify-content:center;gap:6px;margin-top:20px;flex-wrap:wrap}
-.pagination button{padding:6px 14px;border:1px solid #d4c5c0;background:#fff;color:#7a6a6a;font-size:.82rem;cursor:pointer;font-family:inherit;border-radius:4px;transition:all .15s}
+.pagination button{padding:6px 14px;border:1px solid #d4c5c0;background:#fff;color:#7a6a6a;font-size:.82rem;cursor:pointer;font-family:inherit;border-radius:4px}
 .pagination button:hover:not(:disabled){border-color:#c97b8a;color:#c97b8a}
-.pagination button:disabled{opacity:.4;cursor:default}
+.pagination button:disabled{opacity:.4}
 .pagination button.current{background:#c97b8a;color:#fff;border-color:#c97b8a}
-
-/* 留言 */
 .divider{border:none;border-top:1px dashed #e0d5d0;margin:34px 0 22px}
 .sec-label{font-size:.78rem;color:#b09a95;margin-bottom:14px;letter-spacing:1.5px}
 .msg-form{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
 .msg-form input{padding:9px 12px;border:1px solid #d4c5c0;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:4px;color:#4a4a4a}
-.msg-form input:focus{border-color:#c97b8a}
 .msg-form input:nth-child(1){width:190px}
 .msg-form input:nth-child(2){flex:1;min-width:160px}
-.msg-form button{padding:9px 20px;border:1px solid #c97b8a;background:#fff;color:#c97b8a;font-size:14px;cursor:pointer;font-family:inherit;border-radius:4px;transition:all .15s}
+.msg-form button{padding:9px 20px;border:1px solid #c97b8a;background:#fff;color:#c97b8a;font-size:14px;cursor:pointer;border-radius:4px}
 .msg-form button:hover{background:#c97b8a;color:#fff}
 .filters{display:flex;gap:2px;margin-bottom:14px}
-.filters button{padding:3px 12px;border:none;background:transparent;color:#b09a95;font-size:.78rem;cursor:pointer;font-family:inherit;border-radius:12px;transition:all .15s}
-.filters button:hover{color:#c97b8a}
+.filters button{padding:3px 12px;border:none;background:transparent;color:#b09a95;font-size:.78rem;cursor:pointer;border-radius:12px}
 .filters button.on{background:#faf0f2;color:#c97b8a;font-weight:600}
 .msg-list{display:flex;flex-direction:column;gap:8px}
 .msg-item{padding:12px 16px;background:#fff;border:1px solid #f0e8e5;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:12px}
-.msg-info{flex:1}
 .msg-name{font-size:.9rem;font-weight:500;color:#5a4a4a}
 .msg-note-text{font-size:.78rem;color:#aaa}
 .msg-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .msg-date{font-size:.72rem;color:#ccc}
-.badge{font-size:.7rem;padding:2px 9px;border-radius:10px;font-weight:500}
+.badge{font-size:.7rem;padding:2px 9px;border-radius:10px}
 .b-pending{background:#f0eee8;color:#999}
 .b-accepted{background:#fbf0f0;color:#c97b8a}
 .b-completed{background:#edf5ed;color:#6a9a6a}
 .b-rejected{background:#f5f0ed;color:#b09088}
 .footer{text-align:center;margin-top:46px;font-size:.72rem;color:#ccc}
-@media(max-width:580px){.msg-item{flex-direction:column;align-items:flex-start}.msg-right{align-self:flex-end}.msg-form input:nth-child(1){width:100%}.tab-btn{padding:10px 16px}}
 </style>
 </head>
 <body>
@@ -228,7 +195,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     </div>
   </div>
 
-  <!-- Tab 栏 -->
   <div class="tabs" id="tabs">
     <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
     <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
@@ -237,14 +203,10 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     <div class="tab-indicator" id="indicator"></div>
   </div>
 
-  <!-- 结果列表 -->
   <div class="result-list" id="resultList"><div class="loading">加载中...</div></div>
-
-  <!-- 分页 -->
   <div class="pagination" id="pagination"></div>
 
   <hr class="divider">
-
   <div class="sec-label">求书留言</div>
   <div class="msg-form">
     <input type="text" id="msgName" placeholder="小说名称" onkeydown="if(event.key==='Enter')submitMsg()">
@@ -261,7 +223,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   </div>
 
   <div class="msg-list" id="msgList"></div>
-
   <div class="footer">仅提供链接索引，不存储文件</div>
 </div>
 
@@ -269,7 +230,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 let curTab='hot';
 let curPage=1;
 let curFilter='all';
-
 let authorsData = [];
 let authorsTotal = 0;
 let authorsLimit = 5;
@@ -284,8 +244,7 @@ async function loadNovels(){
   pag.innerHTML='';
   try{
     if(q){
-      const url='/api/search?q='+encodeURIComponent(q)+'&page='+curPage;
-      const r=await fetch(url);
+      const r=await fetch('/api/search?q='+encodeURIComponent(q)+'&page='+curPage);
       const d=await r.json();
       if(!d.results.length){list.innerHTML='<div class="empty">没有找到相关小说</div>';return}
       list.innerHTML=d.results.map(n=>renderNovel(n)).join('');
@@ -294,8 +253,7 @@ async function loadNovels(){
     }
 
     if(curTab === 'authors'){
-      const url = '/api/search?tab=authors&page='+curPage;
-      const r = await fetch(url);
+      const r = await fetch('/api/search?tab=authors&page='+curPage);
       const d = await r.json();
       authorsData = d.results || [];
       authorsTotal = d.total || 0;
@@ -304,13 +262,14 @@ async function loadNovels(){
       return;
     }
 
-    const url='/api/search?tab='+curTab+'&page='+curPage;
-    const r=await fetch(url);
+    const r=await fetch('/api/search?tab='+curTab+'&page='+curPage);
     const d=await r.json();
     if(!d.results.length){list.innerHTML='<div class="empty">没有找到相关小说</div>';return}
     list.innerHTML=d.results.map(n=>renderNovel(n)).join('');
     renderPagination(d.total,d.page,d.limit);
-  }catch(e){list.innerHTML='<div class="empty">加载失败，请重试</div>'}
+  }catch(e){
+    list.innerHTML='<div class="empty">加载失败，请重试</div>';
+  }
 }
 
 function renderAuthorCard(a){
@@ -322,12 +281,12 @@ function renderAuthorCard(a){
   let booksHtml = '';
   for(let i=0; i<showCount; i++){
     const b = books[i];
-    const links = (b.drive_links||[]).map(l=>'<a href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+(l.code?'<code>'+esc(l.code)+'</code>':'')+'</a>').join('');
-    booksHtml += '<div class="book-item"><div class="book-title">'+esc(b.title)+'</div><div class="result-links">'+links+'</div></div>';
+    const links = (b.drive_links||[]).map(l=>\`<a href="\${esc(l.url)}" target="_blank" rel="noopener">\${esc(l.label)}\${l.code?'<code>'+esc(l.code)+'</code>':''}</a>\`).join('');
+    booksHtml += \`<div class="book-item"><div class="book-title">\${esc(b.title)}</div><div class="result-links">\${links}</div></div>\`;
   }
 
-  const toggleBtn = books.length > defaultShownBooks ? ('<button class="expand-btn" onclick="toggleAuthor(\''+key+'\')">'+(isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）')+'</button>') : '';
-  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div></div>';
+  const toggleBtn = books.length > defaultShownBooks ? \`<button class="expand-btn" onclick="toggleAuthor('\${key}')">\${isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）'}</button>\` : '';
+  return \`<div class="result-item author-card"><div class="result-head"><span class="result-title">\${esc(a.author)}</span><span class="result-author">\${a.count||0} 本</span>\${toggleBtn}</div><div class="result-desc">\${booksHtml}</div></div>\`;
 }
 
 function renderAuthorsPage(page){
@@ -343,9 +302,9 @@ function renderAuthorsPage(page){
   
   list.innerHTML = authorsData.map(a=>renderAuthorCard(a)).join('');
   let html = '';
-  html += '<button '+(page<=1?'disabled':'')+' onclick="goPage('+(page-1)+')">上一页</button>';
-  html += '<span style="padding:6px 12px;color:#7a6a6a">第 '+page+' / '+pages+' 页</span>';
-  html += '<button '+(page>=pages?'disabled':'')+' onclick="goPage('+(page+1)+')">下一页</button>';
+  html += \`<button \${page<=1?'disabled':''} onclick="goPage(\${page-1})">上一页</button>\`;
+  html += \`<span style="padding:6px 12px;color:#7a6a6a">第 \${page} / \${pages} 页</span>\`;
+  html += \`<button \${page>=pages?'disabled':''} onclick="goPage(\${page+1})">下一页</button>\`;
   pag.innerHTML = html;
 }
 
@@ -355,12 +314,12 @@ function toggleAuthor(key){
 }
 
 function renderNovel(n){
-  const tags=(n.tags||[]).map(t=>'<span>'+esc(t)+'</span>').join('');
+  const tags=(n.tags||[]).map(t=>\`<span>\${esc(t)}</span>\`).join('');
   const links=(n.drive_links||[]).map(l=>{
-    const code=l.code?'<code>'+esc(l.code)+'</code>':'';
-    return '<a class="page-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+code+'</a>';
+    const code=l.code?\`<code>\${esc(l.code)}</code>\`:'';
+    return \`<a class="page-link" href="\${esc(l.url)}" target="_blank" rel="noopener">\${esc(l.label)}\${code}</a>\`;
   }).join('');
-  return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div></div>';
+  return \`<div class="result-item"><div class="result-head"><span class="result-title">\${esc(n.title)}</span><span class="result-author">\${n.author?esc(n.author):''}</span><span class="result-tags">\${tags}</span></div><div class="result-desc">\${esc(n.description||'')}</div><div class="result-links">\${links}</div></div>\`;
 }
 
 function renderPagination(total,page,limit){
@@ -368,15 +327,15 @@ function renderPagination(total,page,limit){
   const pages=Math.ceil(total/limit);
   if(pages<=1){pag.innerHTML='';return}
   let html='';
-  html+='<button '+(page<=1?'disabled':'')+' onclick="goPage('+(page-1)+')">上一页</button>';
+  html+=\`<button \${page<=1?'disabled':''} onclick="goPage(\${page-1})">上一页</button>\`;
   for(let i=1;i<=pages;i++){
     if(i===1||i===pages||(i>=page-1&&i<=page+1)){
-      html+='<button class="'+(i===page?'current':'')+'" onclick="goPage('+i+')">'+i+'</button>';
+      html+=\`<button class="\${i===page?'current':''}" onclick="goPage(\${i})">\${i}</button>\`;
     }else if(i===page-2||i===page+2){
       html+='<span style="padding:6px 4px;color:#ccc">...</span>';
     }
   }
-  html+='<button '+(page>=pages?'disabled':'')+' onclick="goPage('+(page+1)+')">下一页</button>';
+  html+=\`<button \${page>=pages?'disabled':''} onclick="goPage(\${page+1})">下一页</button>\`;
   pag.innerHTML=html;
 }
 
@@ -422,7 +381,7 @@ async function loadMsgs(){
       const cmap={pending:'b-pending',accepted:'b-accepted',completed:'b-completed',rejected:'b-rejected'};
       const labels={pending:'待处理',accepted:'已采纳',completed:'已补充',rejected:'已拒绝'};
       const date=(m.created_at||'').slice(5,10);
-      return '<div class="msg-item"><div class="msg-info"><div class="msg-name">'+esc(m.novel_name)+'</div>'+(m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':'')+'</div><div class="msg-right"><span class="msg-date">'+date+'</span><span class="badge '+cmap[m.status]+'">'+labels[m.status]+'</span></div></div>';
+      return \`<div class="msg-item"><div class="msg-info"><div class="msg-name">\${esc(m.novel_name)}</div>\${m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':''}</div><div class="msg-right"><span class="msg-date">\${date}</span><span class="badge \${cmap[m.status]}">\${labels[m.status]}</span></div></div>\`;
     }).join('');
   }catch(e){list.innerHTML='<div class="empty">加载失败</div>'}
 }
@@ -448,7 +407,7 @@ function setFilter(el,s){
   loadMsgs();
 }
 
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;n'}[c]))}
 
 window.addEventListener('load',function(){
   var activeTab=document.querySelector('.tab-btn.active');
