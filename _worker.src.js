@@ -191,7 +191,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     z-index:99;
 }
 .page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
-.brand-tag{font-size:11px;background:#FFF0F2;color:#D94659;padding:2px 6px;border-radius:4px;font-weight:normal}
+.brand-tag{font-size:11px;background:#FFF0F2;color:#D94659;padding:3px 8px;border-radius:4px;font-weight:500;border:1px solid #FFD1D8;}
 
 .search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
 .search input{flex:1;border:none;padding:0 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#333}
@@ -280,7 +280,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="top">
     <div class="page-title">
         <span>小说搜索</span>
-        <span class="brand-tag">公众号：窝嘟嘟</span>
+        <span class="brand-tag">📌 先转存网盘，防和谐~</span>
     </div>
     <div class="search">
       <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
