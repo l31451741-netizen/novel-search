@@ -134,79 +134,143 @@ const INDEX_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>小说搜索</title>
+<title>窝嘟嘟 · 小说搜索</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#faf7f5;color:#4a4a4a;line-height:1.75;font-size:15px}
-.wrap{max-width:760px;margin:0 auto;padding:32px 20px 60px}
-.top{margin-bottom:24px}
-.top h1{font-size:1.2rem;font-weight:600;margin-bottom:14px;color:#5a4a4a}
-.search{display:flex;border:1px solid #d4c5c0;background:#fff;border-radius:4px;overflow:hidden}
-.search input{flex:1;border:none;padding:11px 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#4a4a4a}
-.search button{padding:11px 22px;border:none;background:#c97b8a;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;letter-spacing:2px;transition:background .15s}
-.search button:hover{background:#b86675}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#F7F8FA;color:#333;line-height:1.75;font-size:15px;position:relative}
+
+/* 全局防搬运暗纹水印层 */
+.watermark-layer{
+    position:fixed;
+    top:0;
+    left:0;
+    width:100vw;
+    height:100vh;
+    pointer-events:none;
+    z-index:999;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220' viewBox='0 0 220 220'><text x='20' y='100' fill='%23333333' fill-opacity='0.04' font-size='13' font-weight='bold' transform='rotate(-30, 20, 100)'>窝嘟嘟首发·严禁搬运</text></svg>");
+}
+
+/* 1. 顶部防迷路安全公告条 */
+.safe-notice-bar{
+    background:linear-gradient(135deg, #FFF0F2 0%, #FFE4E8 100%);
+    color:#D94659;
+    font-size:12px;
+    padding:8px 12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-bottom:1px solid #FFD1D8;
+    position:sticky;
+    top:0;
+    z-index:100;
+}
+.safe-notice-content{
+    display:flex;
+    align-items:center;
+    gap:4px;
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+}
+.safe-notice-content span{
+    font-weight:600;
+}
+
+.wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px}
+.top{margin-bottom:20px;background:#fff;padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.brand-tag{font-size:11px;background:#FFF0F2;color:#D94659;padding:2px 6px;border-radius:4px;font-weight:normal}
+
+.search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
+.search input{flex:1;border:none;padding:0 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#333}
+.search button{padding:0 20px;border:none;background:#D94659;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500;transition:background .15s}
+.search button:hover{background:#c0394b}
+
 .tabs{display:flex;gap:0;margin-bottom:18px;position:relative;border-bottom:1px solid #e0d5d0}
-.tab-btn{padding:10px 22px;border:none;background:transparent;color:#b09a95;font-size:.88rem;cursor:pointer;font-family:inherit;position:relative;transition:color .25s ease;letter-spacing:1px}
-.tab-btn:hover{color:#c97b8a}
-.tab-btn.active{color:#c97b8a;font-weight:600}
-.tab-indicator{position:absolute;bottom:-1px;height:2px;background:#c97b8a;border-radius:1px;transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}
+.tab-btn{padding:10px 22px;border:none;background:transparent;color:#888;font-size:.88rem;cursor:pointer;font-family:inherit;position:relative;transition:color .25s ease;letter-spacing:1px}
+.tab-btn:hover{color:#D94659}
+.tab-btn.active{color:#D94659;font-weight:600}
+.tab-indicator{position:absolute;bottom:-1px;height:2px;background:#D94659;border-radius:1px;transition:left .35s cubic-bezier(.4,0,.2,1),width .35s cubic-bezier(.4,0,.2,1)}
+
 .result-list{display:flex;flex-direction:column;min-height:200px}
-.result-item{padding:18px 16px;background:#fff;border-radius:4px;margin-bottom:10px;border:1px solid #f0e8e5}
+.result-item{padding:18px 16px;background:#fff;border-radius:6px;margin-bottom:10px;border:1px solid #f0e8e5;box-shadow:0 1px 2px rgba(0,0,0,0.02)}
 .result-head{display:flex;align-items:baseline;gap:8px;margin-bottom:4px;flex-wrap:wrap}
-.result-title{font-size:1.02rem;font-weight:600;color:#5a4a4a}
-.result-author{font-size:.8rem;color:#b09a95}
+.result-title{font-size:1.02rem;font-weight:600;color:#222}
+.result-author{font-size:.8rem;color:#888}
 .result-tags{display:inline-flex;gap:4px;margin-left:2px}
-.result-tags span{font-size:.7rem;color:#c97b8a;background:#faf0f2;padding:1px 7px;border-radius:10px}
-.result-desc{color:#888;font-size:.85rem;margin-bottom:10px}
+.result-tags span{font-size:.7rem;color:#D94659;background:#FFF0F2;padding:1px 7px;border-radius:10px}
+.result-desc{color:#666;font-size:.85rem;margin-bottom:10px}
 .result-links{display:flex;flex-wrap:wrap;gap:6px}
-.result-links a{font-size:.78rem;color:#7a6a6a;text-decoration:none;padding:4px 10px;background:#f7f2f0;border-radius:10px;transition:all .15s;display:inline-block}
-.result-links a:hover{background:#c97b8a;color:#fff}
-.result-links a code{font-family:inherit;font-size:.72rem;color:#cbb;margin-left:4px}
-.expand-btn{margin-left:auto;background:transparent;border:1px solid #e6d6d3;color:#7a6a6a;padding:3px 10px;border-radius:10px;cursor:pointer;font-size:.78rem}
-.expand-btn:hover{background:#faf0f2;color:#c97b8a;border-color:#c97b8a}
+.result-links a{font-size:.78rem;color:#555;text-decoration:none;padding:4px 10px;background:#f7f2f0;border-radius:10px;transition:all .15s;display:inline-block}
+.result-links a:hover{background:#D94659;color:#fff}
+.result-links a code{font-family:inherit;font-size:.72rem;color:#aaa;margin-left:4px}
+.expand-btn{margin-left:auto;background:transparent;border:1px solid #FFD1D8;color:#D94659;padding:3px 10px;border-radius:10px;cursor:pointer;font-size:.78rem}
+.expand-btn:hover{background:#FFF0F2}
 .author-card .result-desc{margin-top:8px}
 .book-item{margin-bottom:6px;display:flex;flex-direction:column;gap:2px}
-.book-title{font-size:.92rem;color:#5a4a4a;font-weight:500}
+.book-title{font-size:.92rem;color:#333;font-weight:500}
+
 .empty{text-align:center;color:#ccc;padding:40px 0;font-size:.9rem}
 .loading{text-align:center;padding:20px;color:#ccc;font-size:.85rem}
+
 .pagination{display:flex;justify-content:center;gap:6px;margin-top:20px;flex-wrap:wrap}
-.pagination button{padding:6px 14px;border:1px solid #d4c5c0;background:#fff;color:#7a6a6a;font-size:.82rem;cursor:pointer;font-family:inherit;border-radius:4px}
-.pagination button:hover:not(:disabled){border-color:#c97b8a;color:#c97b8a}
+.pagination button{padding:6px 14px;border:1px solid #ddd;background:#fff;color:#666;font-size:.82rem;cursor:pointer;font-family:inherit;border-radius:4px}
+.pagination button:hover:not(:disabled){border-color:#D94659;color:#D94659}
 .pagination button:disabled{opacity:.4}
-.pagination button.current{background:#c97b8a;color:#fff;border-color:#c97b8a}
+.pagination button.current{background:#D94659;color:#fff;border-color:#D94659}
+
 .divider{border:none;border-top:1px dashed #e0d5d0;margin:34px 0 22px}
-.sec-label{font-size:.78rem;color:#b09a95;margin-bottom:14px;letter-spacing:1.5px}
+.sec-label{font-size:.78rem;color:#888;margin-bottom:14px;letter-spacing:1.5px;font-weight:600}
+
 .msg-form{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
-.msg-form input{padding:9px 12px;border:1px solid #d4c5c0;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:4px;color:#4a4a4a}
+.msg-form input{padding:9px 12px;border:1px solid #ddd;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:4px;color:#333}
 .msg-form input:nth-child(1){width:190px}
 .msg-form input:nth-child(2){flex:1;min-width:160px}
-.msg-form button{padding:9px 20px;border:1px solid #c97b8a;background:#fff;color:#c97b8a;font-size:14px;cursor:pointer;border-radius:4px}
-.msg-form button:hover{background:#c97b8a;color:#fff}
+.msg-form button{padding:9px 20px;border:1px solid #D94659;background:#fff;color:#D94659;font-size:14px;cursor:pointer;border-radius:4px;font-weight:500}
+.msg-form button:hover{background:#D94659;color:#fff}
+
 .filters{display:flex;gap:2px;margin-bottom:14px}
-.filters button{padding:3px 12px;border:none;background:transparent;color:#b09a95;font-size:.78rem;cursor:pointer;border-radius:12px}
-.filters button.on{background:#faf0f2;color:#c97b8a;font-weight:600}
+.filters button{padding:3px 12px;border:none;background:transparent;color:#888;font-size:.78rem;cursor:pointer;border-radius:12px}
+.filters button.on{background:#FFF0F2;color:#D94659;font-weight:600}
+
 .msg-list{display:flex;flex-direction:column;gap:8px}
-.msg-item{padding:12px 16px;background:#fff;border:1px solid #f0e8e5;border-radius:4px;display:flex;justify-content:space-between;align-items:center;gap:12px}
-.msg-name{font-size:.9rem;font-weight:500;color:#5a4a4a}
-.msg-note-text{font-size:.78rem;color:#aaa}
+.msg-item{padding:12px 16px;background:#fff;border:1px solid #f0e8e5;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.msg-name{font-size:.9rem;font-weight:500;color:#333}
+.msg-note-text{font-size:.78rem;color:#888}
 .msg-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .msg-date{font-size:.72rem;color:#ccc}
 .badge{font-size:.7rem;padding:2px 9px;border-radius:10px}
 .b-pending{background:#f0eee8;color:#999}
-.b-accepted{background:#fbf0f0;color:#c97b8a}
+.b-accepted{background:#FFF0F2;color:#D94659}
 .b-completed{background:#edf5ed;color:#6a9a6a}
 .b-rejected{background:#f5f0ed;color:#b09088}
-.footer{text-align:center;margin-top:46px;font-size:.72rem;color:#ccc}
+
+.footer{text-align:center;margin-top:46px;font-size:.72rem;color:#aaa}
 
 /* 右下角悬浮按钮样式 */
-.float-btn{position:fixed;right:24px;bottom:30px;background:#c97b8a;color:#fff;border:none;padding:12px 18px;border-radius:30px;font-size:.85rem;cursor:pointer;box-shadow:0 4px 12px rgba(201,123,138,0.35);z-index:99;font-family:inherit;transition:all .2s;letter-spacing:1px}
-.float-btn:hover{background:#b86675;transform:translateY(-2px);box-shadow:0 6px 16px rgba(201,123,138,0.45)}
+.float-btn{position:fixed;right:24px;bottom:30px;background:#D94659;color:#fff;border:none;padding:12px 18px;border-radius:30px;font-size:.85rem;cursor:pointer;box-shadow:0 4px 12px rgba(217,70,89,0.35);z-index:99;font-family:inherit;transition:all .2s;letter-spacing:1px}
+.float-btn:hover{background:#c0394b;transform:translateY(-2px);box-shadow:0 6px 16px rgba(217,70,89,0.45)}
 </style>
 </head>
 <body>
+
+<!-- 全局防搬运暗纹水印 -->
+<div class="watermark-layer"></div>
+
+<!-- 顶部防迷路/引流横幅 -->
+<div class="safe-notice-bar">
+    <div class="safe-notice-content">
+        <span>💡 防迷路/求书：</span>微信搜「<span>窝嘟嘟</span>」 | 微博「<span>窝嘟嘟开心崽崽</span>」
+    </div>
+</div>
+
 <div class="wrap">
   <div class="top">
-    <h1>小说搜索</h1>
+    <div class="page-title">
+        <span>小说搜索</span>
+        <span class="brand-tag">正版首发：窝嘟嘟</span>
+    </div>
     <div class="search">
       <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
       <button onclick="doSearch()">搜 索</button>
@@ -241,7 +305,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   </div>
 
   <div class="msg-list" id="msgList"></div>
-  <div class="footer">仅提供链接索引，不存储文件</div>
+  <div class="footer">窝嘟嘟 · 仅提供链接索引，不存储文件</div>
 </div>
 
 <!-- 右下角悬浮按钮 -->
@@ -323,7 +387,7 @@ function renderAuthorsPage(page){
   list.innerHTML = authorsData.map(a=>renderAuthorCard(a)).join('');
   let html = '';
   html += '<button '+(page<=1?'disabled':'')+' onclick="goPage('+(page-1)+')">上一页</button>';
-  html += '<span style="padding:6px 12px;color:#7a6a6a">第 '+page+' / '+pages+' 页</span>';
+  html += '<span style="padding:6px 12px;color:#666">第 '+page+' / '+pages+' 页</span>';
   html += '<button '+(page>=pages?'disabled':'')+' onclick="goPage('+(page+1)+')">下一页</button>';
   pag.innerHTML = html;
 }
