@@ -34,9 +34,10 @@ app.get('/api/search', async (c) => {
     if (tab === 'authors') {
       const authorsLimit = 5;
       const authorsOffset = (page - 1) * authorsLimit;
+      // 严格过滤掉各种形式的精选合集、未知等脏数据
       const authorsRows = await db.prepare(
         `SELECT author, count(*) as c FROM novels
-         WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选合集' AND author != '精选集合'
+         WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author NOT LIKE '%精选合集%' AND author NOT LIKE '%精选集合%'
          GROUP BY author ORDER BY c DESC LIMIT ? OFFSET ?`
       ).bind(authorsLimit, authorsOffset).all();
       
@@ -54,7 +55,7 @@ app.get('/api/search', async (c) => {
         resultsArr.push({ author: a.author, count: a.c, novels });
       }
       const totalAuthors = (await db.prepare(
-        `SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选合集' AND author != '精选集合'`
+        `SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author NOT LIKE '%精选合集%' AND author NOT LIKE '%精选集合%'`
       ).first())?.c || 0;
       
       return c.json({ results: resultsArr, total: totalAuthors, page, limit: authorsLimit });
@@ -259,7 +260,7 @@ async function loadNovels(){
       authorsTotal = d.total || 0;
       authorsLimit = d.limit || 5;
       renderAuthorsPage(curPage);
-      return;
+      return; // 修复：必须在这里直接 return，防止后续错误加载其它列表
     }
 
     const r=await fetch('/api/search?tab='+curTab+'&page='+curPage);
