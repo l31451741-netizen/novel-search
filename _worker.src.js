@@ -20,21 +20,34 @@ app.get('/api/search', async (c) => {
     if (q) {
       const tokens = q.split(/\s+/).filter(Boolean);
       const ftsQuery = tokens.map(s => `"${s.replace(/"/g,'') }"`).join(' ');
+      const likeQuery = `%${q}%`;
+      
       const rows = await db.prepare(
-        `SELECT n.id, n.title, n.author, n.description, n.drive_links, n.tags, n.created_at
-         FROM novels_fts f JOIN novels n ON n.id = f.rowid
-         WHERE f MATCH ?
-         ORDER BY n.created_at DESC LIMIT ? OFFSET ?`
-      ).bind(ftsQuery, limit, offset).all();
-      const cnt = await db.prepare(`SELECT count(*) as c FROM novels_fts f WHERE f MATCH ?`).bind(ftsQuery).first();
-      const results = (rows.results || []).map(r => ({ ...r, drive_links: safeParse(r.drive_links, []), tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] }));
+        `SELECT id, title, author, description, drive_links, tags, created_at
+         FROM novels
+         WHERE id IN (SELECT rowid FROM novels_fts WHERE novels_fts MATCH ?)
+            OR author LIKE ?
+         ORDER BY created_at DESC LIMIT ? OFFSET ?`
+      ).bind(ftsQuery, likeQuery, limit, offset).all();
+      
+      const cnt = await db.prepare(
+        `SELECT count(*) as c 
+         FROM novels 
+         WHERE id IN (SELECT rowid FROM novels_fts WHERE novels_fts MATCH ?)
+            OR author LIKE ?`
+      ).bind(ftsQuery, likeQuery).first();
+      
+      const results = (rows.results || []).map(r => ({ 
+        ...r, 
+        drive_links: safeParse(r.drive_links, []), 
+        tags: r.tags ? r.tags.split(',').map(t=>t.trim()).filter(Boolean): [] 
+      }));
       return c.json({ results, total: cnt?.c || 0, page, limit });
     }
 
     if (tab === 'authors') {
       const authorsLimit = 5;
       const authorsOffset = (page - 1) * authorsLimit;
-      // 严格过滤掉各种形式的精选合集、未知等脏数据
       const authorsRows = await db.prepare(
         `SELECT author, count(*) as c FROM novels
          WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author NOT LIKE '%精选合集%' AND author NOT LIKE '%精选集合%'
@@ -184,6 +197,10 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .b-completed{background:#edf5ed;color:#6a9a6a}
 .b-rejected{background:#f5f0ed;color:#b09088}
 .footer{text-align:center;margin-top:46px;font-size:.72rem;color:#ccc}
+
+/* 右下角悬浮按钮样式 */
+.float-btn{position:fixed;right:24px;bottom:30px;background:#c97b8a;color:#fff;border:none;padding:12px 18px;border-radius:30px;font-size:.85rem;cursor:pointer;box-shadow:0 4px 12px rgba(201,123,138,0.35);z-index:99;font-family:inherit;transition:all .2s;letter-spacing:1px}
+.float-btn:hover{background:#b86675;transform:translateY(-2px);box-shadow:0 6px 16px rgba(201,123,138,0.45)}
 </style>
 </head>
 <body>
@@ -207,7 +224,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="result-list" id="resultList"><div class="loading">加载中...</div></div>
   <div class="pagination" id="pagination"></div>
 
-  <hr class="divider">
+  <hr class="divider" id="msgSection">
   <div class="sec-label">求书留言</div>
   <div class="msg-form">
     <input type="text" id="msgName" placeholder="小说名称" onkeydown="if(event.key==='Enter')submitMsg()">
@@ -226,6 +243,9 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="msg-list" id="msgList"></div>
   <div class="footer">仅提供链接索引，不存储文件</div>
 </div>
+
+<!-- 右下角悬浮按钮 -->
+<button class="float-btn" onclick="scrollToMsg()">求书留言</button>
 
 <script>
 let curTab='hot';
@@ -260,7 +280,7 @@ async function loadNovels(){
       authorsTotal = d.total || 0;
       authorsLimit = d.limit || 5;
       renderAuthorsPage(curPage);
-      return; // 修复：必须在这里直接 return，防止后续错误加载其它列表
+      return;
     }
 
     const r=await fetch('/api/search?tab='+curTab+'&page='+curPage);
@@ -364,6 +384,14 @@ function moveIndicator(el){
 function doSearch(){
   curPage=1;
   loadNovels();
+}
+
+function scrollToMsg(){
+  const el = document.getElementById('msgSection');
+  if(el){
+    el.scrollIntoView({behavior:'smooth'});
+    document.getElementById('msgName').focus();
+  }
 }
 
 async function loadMsgs(){
