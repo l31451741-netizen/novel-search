@@ -191,7 +191,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     z-index:99;
 }
 .page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
-.brand-tag{font-size:11px;background:#FFF0F2;color:#D94659;padding:3px 8px;border-radius:4px;font-weight:500;border:1px solid #FFD1D8;}
+.brand-tag{font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 8px;border-radius:4px;font-weight:600;border:1px solid #FCD34D;}
 
 .search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
 .search input{flex:1;border:none;padding:0 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#333}
