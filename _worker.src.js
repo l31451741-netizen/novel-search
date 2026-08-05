@@ -178,7 +178,18 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 }
 
 .wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px}
-.top{margin-bottom:20px;background:#fff;padding:16px;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+
+/* 2. 页面主头部与搜索栏（吸顶固定） */
+.top{
+    margin-bottom:20px;
+    background:#fff;
+    padding:16px;
+    border-radius:8px;
+    box-shadow:0 2px 8px rgba(0,0,0,0.06);
+    position:sticky;
+    top:34px;
+    z-index:99;
+}
 .page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .brand-tag{font-size:11px;background:#FFF0F2;color:#D94659;padding:2px 6px;border-radius:4px;font-weight:normal}
 
@@ -261,7 +272,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 <!-- 顶部防迷路/引流横幅 -->
 <div class="safe-notice-bar">
     <div class="safe-notice-content">
-        <span>💡 防迷路/求书：</span>微信搜「<span>窝嘟嘟</span>」 | 微博「<span>窝嘟嘟开心崽崽</span>」
+        <span>💡 防迷路/求书：</span>微信公众号🔍「<span>窝嘟嘟</span>」 | 微博🔍「<span>窝嘟嘟开心崽崽</span>」
     </div>
 </div>
 
@@ -269,7 +280,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="top">
     <div class="page-title">
         <span>小说搜索</span>
-        <span class="brand-tag">正版首发：窝嘟嘟</span>
+        <span class="brand-tag">公众号：窝嘟嘟</span>
     </div>
     <div class="search">
       <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
