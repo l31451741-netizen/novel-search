@@ -36,7 +36,7 @@ app.get('/api/search', async (c) => {
       const authorsOffset = (page - 1) * authorsLimit;
       const authorsRows = await db.prepare(
         `SELECT author, count(*) as c FROM novels
-         WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选集合'
+         WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选合集' AND author != '精选集合'
          GROUP BY author ORDER BY c DESC LIMIT ? OFFSET ?`
       ).bind(authorsLimit, authorsOffset).all();
       
@@ -54,7 +54,7 @@ app.get('/api/search', async (c) => {
         resultsArr.push({ author: a.author, count: a.c, novels });
       }
       const totalAuthors = (await db.prepare(
-        `SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选集合'`
+        `SELECT count(DISTINCT author) as c FROM novels WHERE author IS NOT NULL AND author != '' AND author != '未知' AND author != '精选合集' AND author != '精选集合'`
       ).first())?.c || 0;
       
       return c.json({ results: resultsArr, total: totalAuthors, page, limit: authorsLimit });
@@ -281,12 +281,12 @@ function renderAuthorCard(a){
   let booksHtml = '';
   for(let i=0; i<showCount; i++){
     const b = books[i];
-    const links = (b.drive_links||[]).map(l=>\`<a href="\${esc(l.url)}" target="_blank" rel="noopener">\${esc(l.label)}\${l.code?'<code>'+esc(l.code)+'</code>':''}</a>\`).join('');
-    booksHtml += \`<div class="book-item"><div class="book-title">\${esc(b.title)}</div><div class="result-links">\${links}</div></div>\`;
+    const links = (b.drive_links||[]).map(l=>`<a href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}${l.code?'<code>'+esc(l.code)+'</code>':''}</a>`).join('');
+    booksHtml += `<div class="book-item"><div class="book-title">${esc(b.title)}</div><div class="result-links">${links}</div></div>`;
   }
 
-  const toggleBtn = books.length > defaultShownBooks ? \`<button class="expand-btn" onclick="toggleAuthor('\${key}')">\${isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）'}</button>\` : '';
-  return \`<div class="result-item author-card"><div class="result-head"><span class="result-title">\${esc(a.author)}</span><span class="result-author">\${a.count||0} 本</span>\${toggleBtn}</div><div class="result-desc">\${booksHtml}</div></div>\`;
+  const toggleBtn = books.length > defaultShownBooks ? `<button class="expand-btn" onclick="toggleAuthor('${key}')">${isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）'}</button>` : '';
+  return `<div class="result-item author-card"><div class="result-head"><span class="result-title">${esc(a.author)}</span><span class="result-author">${a.count||0} 本</span>${toggleBtn}</div><div class="result-desc">${booksHtml}</div></div>`;
 }
 
 function renderAuthorsPage(page){
@@ -296,15 +296,14 @@ function renderAuthorsPage(page){
   const limit = authorsLimit || 5;
   const pages = Math.max(1, Math.ceil(total / limit));
   if(page < 1) page = 1; if(page > pages) page = pages;
-  curPage = page;
   
   if(!authorsData || authorsData.length===0){ list.innerHTML = '<div class="empty">暂无作者</div>'; pag.innerHTML=''; return }
   
   list.innerHTML = authorsData.map(a=>renderAuthorCard(a)).join('');
   let html = '';
-  html += \`<button \${page<=1?'disabled':''} onclick="goPage(\${page-1})">上一页</button>\`;
-  html += \`<span style="padding:6px 12px;color:#7a6a6a">第 \${page} / \${pages} 页</span>\`;
-  html += \`<button \${page>=pages?'disabled':''} onclick="goPage(\${page+1})">下一页</button>\`;
+  html += `<button ${page<=1?'disabled':''} onclick="goPage(${page-1})">上一页</button>`;
+  html += `<span style="padding:6px 12px;color:#7a6a6a">第 ${page} / ${pages} 页</span>`;
+  html += `<button ${page>=pages?'disabled':''} onclick="goPage(${page+1})">下一页</button>`;
   pag.innerHTML = html;
 }
 
@@ -314,12 +313,12 @@ function toggleAuthor(key){
 }
 
 function renderNovel(n){
-  const tags=(n.tags||[]).map(t=>\`<span>\${esc(t)}</span>\`).join('');
+  const tags=(n.tags||[]).map(t=>`<span>${esc(t)}</span>`).join('');
   const links=(n.drive_links||[]).map(l=>{
-    const code=l.code?\`<code>\${esc(l.code)}</code>\`:'';
-    return \`<a class="page-link" href="\${esc(l.url)}" target="_blank" rel="noopener">\${esc(l.label)}\${code}</a>\`;
+    const code=l.code?`<code>${esc(l.code)}</code>`:'';
+    return `<a class="page-link" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}${code}</a>`;
   }).join('');
-  return \`<div class="result-item"><div class="result-head"><span class="result-title">\${esc(n.title)}</span><span class="result-author">\${n.author?esc(n.author):''}</span><span class="result-tags">\${tags}</span></div><div class="result-desc">\${esc(n.description||'')}</div><div class="result-links">\${links}</div></div>\`;
+  return `<div class="result-item"><div class="result-head"><span class="result-title">${esc(n.title)}</span><span class="result-author">${n.author?esc(n.author):''}</span><span class="result-tags">${tags}</span></div><div class="result-desc">${esc(n.description||'')}</div><div class="result-links">${links}</div></div>`;
 }
 
 function renderPagination(total,page,limit){
@@ -327,25 +326,21 @@ function renderPagination(total,page,limit){
   const pages=Math.ceil(total/limit);
   if(pages<=1){pag.innerHTML='';return}
   let html='';
-  html+=\`<button \${page<=1?'disabled':''} onclick="goPage(\${page-1})">上一页</button>\`;
+  html+=`<button ${page<=1?'disabled':''} onclick="goPage(${page-1})">上一页</button>`;
   for(let i=1;i<=pages;i++){
     if(i===1||i===pages||(i>=page-1&&i<=page+1)){
-      html+=\`<button class="\${i===page?'current':''}" onclick="goPage(\${i})">\${i}</button>\`;
+      html+=`<button class="${i===page?'current':''}" onclick="goPage(${i})">${i}</button>`;
     }else if(i===page-2||i===page+2){
       html+='<span style="padding:6px 4px;color:#ccc">...</span>';
     }
   }
-  html+=\`<button \${page>=pages?'disabled':''} onclick="goPage(\${page+1})">下一页</button>\`;
+  html+=`<button ${page>=pages?'disabled':''} onclick="goPage(${page+1})">下一页</button>`;
   pag.innerHTML=html;
 }
 
 function goPage(p){
   curPage=p;
-  if(curTab==='authors'){
-    renderAuthorsPage(curPage);
-  }else{
-    loadNovels();
-  }
+  loadNovels();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -381,7 +376,7 @@ async function loadMsgs(){
       const cmap={pending:'b-pending',accepted:'b-accepted',completed:'b-completed',rejected:'b-rejected'};
       const labels={pending:'待处理',accepted:'已采纳',completed:'已补充',rejected:'已拒绝'};
       const date=(m.created_at||'').slice(5,10);
-      return \`<div class="msg-item"><div class="msg-info"><div class="msg-name">\${esc(m.novel_name)}</div>\${m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':''}</div><div class="msg-right"><span class="msg-date">\${date}</span><span class="badge \${cmap[m.status]}">\${labels[m.status]}</span></div></div>\`;
+      return `<div class="msg-item"><div class="msg-info"><div class="msg-name">${esc(m.novel_name)}</div>${m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':''}</div><div class="msg-right"><span class="msg-date">${date}</span><span class="badge ${cmap[m.status]}">${labels[m.status]}</span></div></div>`;
     }).join('');
   }catch(e){list.innerHTML='<div class="empty">加载失败</div>'}
 }
@@ -407,7 +402,7 @@ function setFilter(el,s){
   loadMsgs();
 }
 
-function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;n'}[c]))}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 
 window.addEventListener('load',function(){
   var activeTab=document.querySelector('.tab-btn.active');
