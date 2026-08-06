@@ -164,6 +164,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     position:sticky;
     top:0;
     z-index:100;
+    height:35px;
 }
 .safe-notice-content{
     display:flex;
@@ -183,8 +184,9 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     background:#ffffff;
     border-bottom:1px solid #eee;
     position:sticky;
-    top:33px;
+    top:35px;
     z-index:99;
+    height:46px;
 }
 .nav-tab-item{
     flex:1;
@@ -207,28 +209,48 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .page-section { display: none; padding: 20px 16px 60px; max-width: 760px; margin: 0 auto; }
 .page-section.active { display: block; }
 
+/* 搜索页顶部固定容器（包含搜索框及分类 Tabs） */
+.search-sticky-container {
+    position: sticky;
+    top: 81px;
+    z-index: 98;
+    background: #F7F8FA;
+    padding-top: 10px;
+    margin-top: -10px;
+    margin-left: -16px;
+    margin-right: -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
 .top{
-    margin-bottom:20px;
+    margin-bottom:14px;
     background:#fff;
     padding:16px;
     border-radius:8px;
     box-shadow:0 2px 8px rgba(0,0,0,0.06);
 }
-.page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
-
-/* 嵌入搜索库头部的安全提示条 */
-.search-notice-tip{
-    background:#FEF3C7;
-    color:#D97706;
-    padding:8px 12px;
-    border-radius:6px;
-    font-size:12px;
+.page-title{
+    font-size:1.1rem;
+    font-weight:bold;
+    color:#111;
     margin-bottom:12px;
-    font-weight:600;
-    border:1px solid #FCD34D;
     display:flex;
     align-items:center;
-    gap:6px;
+    justify-content:space-between;
+    gap:10px;
+}
+
+/* 标题右侧防和谐提示标签 */
+.title-notice-badge {
+    background:#FEF3C7;
+    color:#D97706;
+    padding:2px 8px;
+    border-radius:4px;
+    font-size:11px;
+    font-weight:normal;
+    border:1px solid #FCD34D;
+    white-space:nowrap;
 }
 
 .search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
@@ -236,7 +258,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .search button{padding:0 20px;border:none;background:#D94659;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;font-weight:500;transition:background .15s}
 .search button:hover{background:#c0394b}
 
-.tabs{display:flex;gap:0;margin-bottom:18px;position:relative;border-bottom:1px solid #e0d5d0}
+.tabs{display:flex;gap:0;margin-bottom:18px;position:relative;border-bottom:1px solid #e0d5d0;background:#F7F8FA;padding-top:4px;}
 .tab-btn{padding:10px 22px;border:none;background:transparent;color:#888;font-size:.88rem;cursor:pointer;font-family:inherit;position:relative;transition:color .25s ease;letter-spacing:1px}
 .tab-btn:hover{color:#D94659}
 .tab-btn.active{color:#D94659;font-weight:600}
@@ -269,7 +291,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .pagination button:disabled{opacity:.4}
 .pagination button.current{background:#D94659;color:#fff;border-color:#D94659}
 
-/* 求书表单（改为两行） */
+/* 求书表单（两行） */
 .msg-form{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.02);display:flex;flex-direction:column;gap:10px;}
 .msg-form input{padding:10px 12px;border:1px solid #ddd;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:6px;color:#333;width:100%;}
 .msg-form button{padding:10px 20px;border:1px solid #D94659;background:#D94659;color:#fff;font-size:14px;cursor:pointer;border-radius:6px;font-weight:500;width:100%;}
@@ -336,7 +358,8 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .b-completed{background:#edf5ed;color:#6a9a6a}
 .b-rejected{background:#f5f0ed;color:#b09088}
 
-.footer{text-align:center;margin-top:46px;font-size:.72rem;color:#aaa}
+.footer{text-align:center;margin-top:46px;font-size:.72rem;color:#aaa;line-height:1.6;}
+.footer-disclaimer{margin-top:4px;color:#bbb;font-size:.68rem;}
 </style>
 </head>
 <body>
@@ -359,31 +382,33 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 
 <!-- ================= 模块一：小说搜索页 ================= -->
 <div id="section-search" class="page-section active">
-  <div class="top">
-    <div class="page-title">
-        <span>小说搜索库</span>
+  <div class="search-sticky-container">
+    <div class="top">
+      <div class="page-title">
+          <span>小说搜索库</span>
+          <span class="title-notice-badge">📌 提示：请先转存网盘，防和谐~</span>
+      </div>
+      <div class="search">
+        <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
+        <button onclick="doSearch()">搜 索</button>
+      </div>
     </div>
-    <!-- 移至小说搜索库内部的安全提示 -->
-    <div class="search-notice-tip">
-        📌 提示：请先转存网盘，防和谐~
-    </div>
-    <div class="search">
-      <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
-      <button onclick="doSearch()">搜 索</button>
-    </div>
-  </div>
 
-  <div class="tabs" id="tabs">
-    <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
-    <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
-    <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
-    <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
-    <div class="tab-indicator" id="indicator"></div>
+    <div class="tabs" id="tabs">
+      <button class="tab-btn active" onclick="switchTab(this,'hot')">热门</button>
+      <button class="tab-btn" onclick="switchTab(this,'featured')">精选</button>
+      <button class="tab-btn" onclick="switchTab(this,'authors')">作者合集</button>
+      <button class="tab-btn" onclick="switchTab(this,'latest')">最新</button>
+      <div class="tab-indicator" id="indicator"></div>
+    </div>
   </div>
 
   <div class="result-list" id="resultList"><div class="loading">加载中...</div></div>
   <div class="pagination" id="pagination"></div>
-  <div class="footer">窝嘟嘟 · 仅提供链接索引，不存储文件</div>
+  <div class="footer">
+    <div>窝嘟嘟 · 仅提供链接索引，不存储文件</div>
+    <div class="footer-disclaimer">免责声明：本站所有内容均为用户分享上传，仅供学习交流使用。如有侵权或涉及版权问题，请联系我们进行删除。</div>
+  </div>
 </div>
 
 <!-- ================= 模块二：社区求书板 ================= -->
@@ -420,7 +445,10 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   </div>
 
   <div class="msg-list" id="msgList"></div>
-  <div class="footer">窝嘟嘟 · 社区求书板</div>
+  <div class="footer">
+    <div>窝嘟嘟 · 社区求书板</div>
+    <div class="footer-disclaimer">免责声明：本站所有内容均为用户分享上传，仅供学习交流使用。如有侵权或涉及版权问题，请联系我们进行删除。</div>
+  </div>
 </div>
 
 <script>
@@ -601,7 +629,6 @@ function switchReqMainTab(el, type) {
     document.querySelectorAll('.req-main-tabs .req-tab-btn').forEach(b => b.classList.remove('active'));
     el.classList.add('active');
 
-    // “我提交的书单”下隐藏二级状态和时间筛选工具栏
     const toolbar = document.getElementById('reqToolbar');
     if (type === 'mine') {
         toolbar.style.display = 'none';
@@ -637,7 +664,6 @@ function renderMessageList() {
             return;
         }
     } else {
-        // 1. 状态二级过滤
         if (curFilter !== 'all') {
             if (curFilter === 'completed') {
                 targetList = targetList.filter(item => item.status === 'completed' || item.status === 'success');
@@ -646,7 +672,6 @@ function renderMessageList() {
             }
         }
 
-        // 2. 时间范围过滤
         if (timeFilter !== 'all') {
             const now = new Date();
             let limitDays = 3;
