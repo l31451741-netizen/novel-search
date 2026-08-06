@@ -100,7 +100,7 @@ app.get('/api/search', async (c) => {
 app.get('/api/messages', async (c) => {
   const status = c.req.query('status') || '';
   const page = Math.max(1, parseInt(c.req.query('page') || '1'));
-  const limit = 20;
+  const limit = 50;
   const offset = (page - 1) * limit;
   const db = c.env.DB;
   try {
@@ -176,7 +176,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .safe-notice-content span{
     font-weight:600;
 }
-.brand-tag{font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 8px;border-radius:4px;font-weight:600;border:1px solid #FCD34D;}
 
 /* 顶层大 Tab 切换导航栏 */
 .main-nav-tabs{
@@ -215,7 +214,22 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     border-radius:8px;
     box-shadow:0 2px 8px rgba(0,0,0,0.06);
 }
-.page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+
+/* 嵌入搜索库头部的安全提示条 */
+.search-notice-tip{
+    background:#FEF3C7;
+    color:#D97706;
+    padding:8px 12px;
+    border-radius:6px;
+    font-size:12px;
+    margin-bottom:12px;
+    font-weight:600;
+    border:1px solid #FCD34D;
+    display:flex;
+    align-items:center;
+    gap:6px;
+}
 
 .search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
 .search input{flex:1;border:none;padding:0 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#333}
@@ -245,7 +259,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .author-card .result-desc{margin-top:8px}
 .book-item{margin-bottom:6px;display:flex;flex-direction:column;gap:2px}
 .book-title{font-size:.92rem;color:#333;font-weight:500}
-.anti-harmony-tip { font-size: 11px; color: #e65c5c; margin-top: 8px; font-weight: 500; }
 
 .empty{text-align:center;color:#ccc;padding:40px 0;font-size:.9rem}
 .loading{text-align:center;padding:20px;color:#ccc;font-size:.85rem}
@@ -256,21 +269,65 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .pagination button:disabled{opacity:.4}
 .pagination button.current{background:#D94659;color:#fff;border-color:#D94659}
 
-.msg-form{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.02);display:flex;gap:8px;flex-wrap:wrap}
-.msg-form input{padding:9px 12px;border:1px solid #ddd;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:4px;color:#333}
-.msg-form input:nth-child(1){width:190px}
-.msg-form input:nth-child(2){flex:1;min-width:160px}
-.msg-form button{padding:9px 20px;border:1px solid #D94659;background:#D94659;color:#fff;font-size:14px;cursor:pointer;border-radius:4px;font-weight:500}
+/* 求书表单（改为两行） */
+.msg-form{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.02);display:flex;flex-direction:column;gap:10px;}
+.msg-form input{padding:10px 12px;border:1px solid #ddd;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:6px;color:#333;width:100%;}
+.msg-form button{padding:10px 20px;border:1px solid #D94659;background:#D94659;color:#fff;font-size:14px;cursor:pointer;border-radius:6px;font-weight:500;width:100%;}
 .msg-form button:hover{background:#c0394b}
 
-.filters{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;}
-.filters button{padding:4px 12px;border:1px solid #ddd;background:#fff;color:#888;font-size:.78rem;cursor:pointer;border-radius:12px;white-space:nowrap}
+/* 社区求书板一级主 Tab */
+.req-main-tabs{
+    display:flex;
+    background:#fff;
+    border-radius:8px;
+    overflow:hidden;
+    margin-bottom:14px;
+    border:1px solid #e0d5d0;
+    box-shadow:0 1px 2px rgba(0,0,0,0.02);
+}
+.req-tab-btn{
+    flex:1;
+    text-align:center;
+    padding:12px 0;
+    font-size:15px;
+    color:#666;
+    cursor:pointer;
+    border:none;
+    background:transparent;
+    font-family:inherit;
+    font-weight:500;
+    border-bottom:2px solid transparent;
+    transition:all .2s;
+}
+.req-tab-btn.active{
+    color:#D94659;
+    border-bottom-color:#D94659;
+    font-weight:bold;
+    background:#fff;
+}
+
+/* 求书二级筛选与时间下拉栏 */
+.req-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
+.filters{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;}
+.filters button{padding:5px 12px;border:1px solid #ddd;background:#fff;color:#888;font-size:.78rem;cursor:pointer;border-radius:12px;white-space:nowrap}
 .filters button.on{background:#D94659;color:#fff;border-color:#D94659;font-weight:600}
+
+.time-select{
+    padding:5px 10px;
+    border:1px solid #ddd;
+    background:#fff;
+    color:#666;
+    font-size:.78rem;
+    border-radius:12px;
+    outline:none;
+    cursor:pointer;
+    font-family:inherit;
+}
 
 .msg-list{display:flex;flex-direction:column;gap:8px}
 .msg-item{padding:12px 16px;background:#fff;border:1px solid #f0e8e5;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:12px}
 .msg-name{font-size:.9rem;font-weight:500;color:#333}
-.msg-note-text{font-size:.78rem;color:#888}
+.msg-note-text{font-size:.78rem;color:#888;margin-top:2px}
 .msg-right{display:flex;align-items:center;gap:10px;flex-shrink:0}
 .msg-date{font-size:.72rem;color:#ccc}
 .badge{font-size:.7rem;padding:2px 9px;border-radius:10px}
@@ -292,7 +349,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     <div class="safe-notice-content">
         <span>💡 防迷路/求书：</span>微信公众号🔍<span>窝嘟嘟</span> | 微博🔍<span>窝嘟嘟开心崽崽</span>
     </div>
-    <span class="brand-tag">📌 先转存网盘，防和谐~</span>
 </div>
 
 <!-- 顶层大 Tab 切换导航 -->
@@ -306,6 +362,10 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
   <div class="top">
     <div class="page-title">
         <span>小说搜索库</span>
+    </div>
+    <!-- 移至小说搜索库内部的安全提示 -->
+    <div class="search-notice-tip">
+        📌 提示：请先转存网盘，防和谐~
     </div>
     <div class="search">
       <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
@@ -334,13 +394,29 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     <button onclick="submitMsg()">提交求书留言</button>
   </div>
 
-  <div class="filters" id="filters">
-    <button class="on" onclick="setFilter(this,'all')">全部留言</button>
-    <button onclick="setFilter(this,'pending')">待处理</button>
-    <button onclick="setFilter(this,'accepted')">已采纳</button>
-    <button onclick="setFilter(this,'completed')">已补充</button>
-    <button onclick="setFilter(this,'rejected')">已拒绝</button>
-    <button onclick="setFilter(this,'mine')">👤 我提交的书单</button>
+  <!-- 主 Tab：全部留言 / 我提交的书单 -->
+  <div class="req-main-tabs">
+    <button class="req-tab-btn active" onclick="switchReqMainTab(this, 'all')">全部留言</button>
+    <button class="req-tab-btn" onclick="switchReqMainTab(this, 'mine')">我提交的书单</button>
+  </div>
+
+  <!-- 二级工具栏：状态二级分类 + 时间筛选下拉框（仅在全部留言下展示） -->
+  <div class="req-toolbar" id="reqToolbar">
+    <div class="filters" id="filters">
+      <button class="on" onclick="setFilter(this,'all')">全部</button>
+      <button onclick="setFilter(this,'pending')">待处理</button>
+      <button onclick="setFilter(this,'accepted')">已采纳</button>
+      <button onclick="setFilter(this,'completed')">已补充</button>
+      <button onclick="setFilter(this,'rejected')">已拒绝</button>
+    </div>
+    <div>
+      <select class="time-select" id="timeSelect" onchange="onTimeFilterChange()">
+        <option value="3days" selected>近三天</option>
+        <option value="1week">近一周</option>
+        <option value="1month">近一个月</option>
+        <option value="all">全部时间</option>
+      </select>
+    </div>
   </div>
 
   <div class="msg-list" id="msgList"></div>
@@ -350,7 +426,10 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 <script>
 let curTab='hot';
 let curPage=1;
-let curFilter='all';
+let reqMainTab='all';   // 'all' 或 'mine'
+let curFilter='all';    // 二级状态：all, pending, accepted, completed, rejected
+let timeFilter='3days'; // 时间筛选：3days, 1week, 1month, all
+
 let authorsData = [];
 let authorsTotal = 0;
 let authorsLimit = 5;
@@ -423,7 +502,7 @@ function renderAuthorCard(a){
   }
 
   const toggleBtn = books.length > defaultShownBooks ? '<button class="expand-btn" onclick="toggleAuthor(\\''+key+'\\')">'+(isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）')+'</button>' : '';
-  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div><div class="anti-harmony-tip">⚠️ 防和谐：请先【转存】到自己网盘再下载！</div></div>';
+  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div></div>';
 }
 
 function renderAuthorsPage(page){
@@ -455,7 +534,7 @@ function renderNovel(n){
     const code=l.code?'<code>'+esc(l.code)+'</code>':'';
     return '<a class="page-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+code+'</a>';
   }).join('');
-  return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div><div class="anti-harmony-tip">⚠️ 防和谐：请先【转存】到自己网盘再下载！</div></div>';
+  return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div></div>';
 }
 
 function renderPagination(total,page,limit){
@@ -513,30 +592,73 @@ async function loadMsgs(){
     const r=await fetch('/api/messages');
     const d=await r.json();
     cachedMessages = d.results || [];
-    renderMessageList(curFilter);
+    renderMessageList();
   }catch(e){list.innerHTML='<div class="empty">加载失败</div>'}
 }
 
-function renderMessageList(filterType) {
+function switchReqMainTab(el, type) {
+    reqMainTab = type;
+    document.querySelectorAll('.req-main-tabs .req-tab-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+
+    // “我提交的书单”下隐藏二级状态和时间筛选工具栏
+    const toolbar = document.getElementById('reqToolbar');
+    if (type === 'mine') {
+        toolbar.style.display = 'none';
+    } else {
+        toolbar.style.display = 'flex';
+    }
+    renderMessageList();
+}
+
+function setFilter(el, s) {
+    curFilter = s;
+    document.querySelectorAll('#filters button').forEach(b => b.classList.remove('on'));
+    el.classList.add('on');
+    renderMessageList();
+}
+
+function onTimeFilterChange() {
+    timeFilter = document.getElementById('timeSelect').value;
+    renderMessageList();
+}
+
+function renderMessageList() {
     const list = document.getElementById('msgList');
     list.innerHTML = '';
 
-    let myIds = getMyLocalRequests();
     let targetList = cachedMessages;
+    let myIds = getMyLocalRequests();
 
-    if (filterType === 'pending') {
-        targetList = cachedMessages.filter(item => item.status === 'pending');
-    } else if (filterType === 'accepted') {
-        targetList = cachedMessages.filter(item => item.status === 'accepted');
-    } else if (filterType === 'completed') {
-        targetList = cachedMessages.filter(item => item.status === 'completed' || item.status === 'success');
-    } else if (filterType === 'rejected') {
-        targetList = cachedMessages.filter(item => item.status === 'rejected');
-    } else if (filterType === 'mine') {
+    if (reqMainTab === 'mine') {
         targetList = cachedMessages.filter(item => myIds.includes(item.id));
         if (targetList.length === 0) {
             list.innerHTML = '<div class="empty">您当前还没有在本机提交过求书哦~</div>';
             return;
+        }
+    } else {
+        // 1. 状态二级过滤
+        if (curFilter !== 'all') {
+            if (curFilter === 'completed') {
+                targetList = targetList.filter(item => item.status === 'completed' || item.status === 'success');
+            } else {
+                targetList = targetList.filter(item => item.status === curFilter);
+            }
+        }
+
+        // 2. 时间范围过滤
+        if (timeFilter !== 'all') {
+            const now = new Date();
+            let limitDays = 3;
+            if (timeFilter === '1week') limitDays = 7;
+            if (timeFilter === '1month') limitDays = 30;
+
+            targetList = targetList.filter(item => {
+                if (!item.created_at) return false;
+                const itemDate = new Date(item.created_at.replace(/-/g, '/'));
+                const diffDays = (now - itemDate) / (1000 * 60 * 60 * 24);
+                return diffDays <= limitDays;
+            });
         }
     }
 
@@ -575,13 +697,6 @@ async function submitMsg(){
     alert('提交成功！系统正在加急处理，可在【我提交的书单】中随时查看进度。');
     loadMsgs();
   }catch(e){alert('提交失败，请重试')}
-}
-
-function setFilter(el,s){
-  curFilter=s;
-  document.querySelectorAll('#filters button').forEach(b=>b.classList.remove('on'));
-  el.classList.add('on');
-  renderMessageList(s);
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
