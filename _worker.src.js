@@ -125,8 +125,8 @@ app.post('/api/messages', async (c) => {
   const note = (body.note || '').trim().slice(0, 1000);
   if (!name) return c.json({ error: '请填写小说名称' }, 400);
   const db = c.env.DB;
-  await db.prepare(`INSERT INTO messages (novel_name, note, status, created_at) VALUES (?, ?, 'pending', datetime('now'))`).bind(name, note).run();
-  return c.json({ ok: true });
+  const res = await db.prepare(`INSERT INTO messages (novel_name, note, status, created_at) VALUES (?, ?, 'pending', datetime('now'))`).bind(name, note).run();
+  return c.json({ ok: true, id: res.meta.last_row_id });
 });
 
 const INDEX_HTML = `<!DOCTYPE html>
@@ -134,10 +134,10 @@ const INDEX_HTML = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>窝嘟嘟 · 小说搜索</title>
+<title>窝嘟嘟 · 小说搜索与求书板</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#F7F8FA;color:#333;line-height:1.75;font-size:15px;position:relative}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#F7F8FA;color:#333;line-height:1.75;font-size:15px;position:relative;padding-bottom:40px;}
 
 /* 全局防搬运暗纹水印层 */
 .watermark-layer{
@@ -159,7 +159,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
     padding:8px 12px;
     display:flex;
     align-items:center;
-    justify-content:center;
+    justify-content:space-between;
     border-bottom:1px solid #FFD1D8;
     position:sticky;
     top:0;
@@ -176,22 +176,46 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .safe-notice-content span{
     font-weight:600;
 }
+.brand-tag{font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 8px;border-radius:4px;font-weight:600;border:1px solid #FCD34D;}
 
-.wrap{max-width:760px;margin:0 auto;padding:24px 16px 60px}
+/* 顶层大 Tab 切换导航栏 */
+.main-nav-tabs{
+    display:flex;
+    background:#ffffff;
+    border-bottom:1px solid #eee;
+    position:sticky;
+    top:33px;
+    z-index:99;
+}
+.nav-tab-item{
+    flex:1;
+    text-align:center;
+    padding:12px 0;
+    font-size:15px;
+    color:#666;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    font-weight:500;
+}
+.nav-tab-item.active{
+    color:#D94659;
+    border-bottom-color:#D94659;
+    font-weight:bold;
+    background:#fff;
+}
 
-/* 2. 页面主头部与搜索栏（吸顶固定） */
+/* 页面内容区块显隐控制 */
+.page-section { display: none; padding: 20px 16px 60px; max-width: 760px; margin: 0 auto; }
+.page-section.active { display: block; }
+
 .top{
     margin-bottom:20px;
     background:#fff;
     padding:16px;
     border-radius:8px;
     box-shadow:0 2px 8px rgba(0,0,0,0.06);
-    position:sticky;
-    top:34px;
-    z-index:99;
 }
 .page-title{font-size:1.1rem;font-weight:bold;color:#111;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
-.brand-tag{font-size:12px;background:#FEF3C7;color:#D97706;padding:3px 8px;border-radius:4px;font-weight:600;border:1px solid #FCD34D;}
 
 .search{display:flex;height:40px;border-radius:6px;overflow:hidden;border:1px solid #D94659;background:#fff}
 .search input{flex:1;border:none;padding:0 14px;font-size:14px;outline:none;background:transparent;font-family:inherit;color:#333}
@@ -221,6 +245,7 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .author-card .result-desc{margin-top:8px}
 .book-item{margin-bottom:6px;display:flex;flex-direction:column;gap:2px}
 .book-title{font-size:.92rem;color:#333;font-weight:500}
+.anti-harmony-tip { font-size: 11px; color: #e65c5c; margin-top: 8px; font-weight: 500; }
 
 .empty{text-align:center;color:#ccc;padding:40px 0;font-size:.9rem}
 .loading{text-align:center;padding:20px;color:#ccc;font-size:.85rem}
@@ -231,19 +256,16 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .pagination button:disabled{opacity:.4}
 .pagination button.current{background:#D94659;color:#fff;border-color:#D94659}
 
-.divider{border:none;border-top:1px dashed #e0d5d0;margin:34px 0 22px}
-.sec-label{font-size:.78rem;color:#888;margin-bottom:14px;letter-spacing:1.5px;font-weight:600}
-
-.msg-form{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.msg-form{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.02);display:flex;gap:8px;flex-wrap:wrap}
 .msg-form input{padding:9px 12px;border:1px solid #ddd;background:#fff;font-size:14px;font-family:inherit;outline:none;border-radius:4px;color:#333}
 .msg-form input:nth-child(1){width:190px}
 .msg-form input:nth-child(2){flex:1;min-width:160px}
-.msg-form button{padding:9px 20px;border:1px solid #D94659;background:#fff;color:#D94659;font-size:14px;cursor:pointer;border-radius:4px;font-weight:500}
-.msg-form button:hover{background:#D94659;color:#fff}
+.msg-form button{padding:9px 20px;border:1px solid #D94659;background:#D94659;color:#fff;font-size:14px;cursor:pointer;border-radius:4px;font-weight:500}
+.msg-form button:hover{background:#c0394b}
 
-.filters{display:flex;gap:2px;margin-bottom:14px}
-.filters button{padding:3px 12px;border:none;background:transparent;color:#888;font-size:.78rem;cursor:pointer;border-radius:12px}
-.filters button.on{background:#FFF0F2;color:#D94659;font-weight:600}
+.filters{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;}
+.filters button{padding:4px 12px;border:1px solid #ddd;background:#fff;color:#888;font-size:.78rem;cursor:pointer;border-radius:12px;white-space:nowrap}
+.filters button.on{background:#D94659;color:#fff;border-color:#D94659;font-weight:600}
 
 .msg-list{display:flex;flex-direction:column;gap:8px}
 .msg-item{padding:12px 16px;background:#fff;border:1px solid #f0e8e5;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -258,10 +280,6 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 .b-rejected{background:#f5f0ed;color:#b09088}
 
 .footer{text-align:center;margin-top:46px;font-size:.72rem;color:#aaa}
-
-/* 右下角悬浮按钮样式 */
-.float-btn{position:fixed;right:24px;bottom:30px;background:#D94659;color:#fff;border:none;padding:12px 18px;border-radius:30px;font-size:.85rem;cursor:pointer;box-shadow:0 4px 12px rgba(217,70,89,0.35);z-index:99;font-family:inherit;transition:all .2s;letter-spacing:1px}
-.float-btn:hover{background:#c0394b;transform:translateY(-2px);box-shadow:0 6px 16px rgba(217,70,89,0.45)}
 </style>
 </head>
 <body>
@@ -272,15 +290,22 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 <!-- 顶部防迷路/引流横幅 -->
 <div class="safe-notice-bar">
     <div class="safe-notice-content">
-        <span>💡 防迷路/求书：</span>微信公众号🔍「<span>窝嘟嘟</span>」 | 微博🔍「<span>窝嘟嘟开心崽崽</span>」
+        <span>💡 防迷路/求书：</span>微信公众号🔍<span>窝嘟嘟</span> | 微博🔍<span>窝嘟嘟开心崽崽</span>
     </div>
+    <span class="brand-tag">📌 先转存网盘，防和谐~</span>
 </div>
 
-<div class="wrap">
+<!-- 顶层大 Tab 切换导航 -->
+<div class="main-nav-tabs">
+    <div class="nav-tab-item active" onclick="switchMainTab('search')">📚 小说搜索</div>
+    <div class="nav-tab-item" onclick="switchMainTab('request')">💬 社区求书板</div>
+</div>
+
+<!-- ================= 模块一：小说搜索页 ================= -->
+<div id="section-search" class="page-section active">
   <div class="top">
     <div class="page-title">
-        <span>小说搜索</span>
-        <span class="brand-tag">📌 先转存网盘，防和谐~</span>
+        <span>小说搜索库</span>
     </div>
     <div class="search">
       <input type="text" id="q" placeholder="书名、作者或标签" onkeydown="if(event.key==='Enter')doSearch()">
@@ -298,29 +323,29 @@ body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;backgr
 
   <div class="result-list" id="resultList"><div class="loading">加载中...</div></div>
   <div class="pagination" id="pagination"></div>
+  <div class="footer">窝嘟嘟 · 仅提供链接索引，不存储文件</div>
+</div>
 
-  <hr class="divider" id="msgSection">
-  <div class="sec-label">求书留言</div>
+<!-- ================= 模块二：社区求书板 ================= -->
+<div id="section-request" class="page-section">
   <div class="msg-form">
-    <input type="text" id="msgName" placeholder="小说名称" onkeydown="if(event.key==='Enter')submitMsg()">
-    <input type="text" id="msgNote" placeholder="备注（选填）" onkeydown="if(event.key==='Enter')submitMsg()">
-    <button onclick="submitMsg()">提 交</button>
+    <input type="text" id="msgName" placeholder="想要的小说名称（必填）" onkeydown="if(event.key==='Enter')submitMsg()">
+    <input type="text" id="msgNote" placeholder="备注：作者或补充信息（选填）" onkeydown="if(event.key==='Enter')submitMsg()">
+    <button onclick="submitMsg()">提交求书留言</button>
   </div>
 
   <div class="filters" id="filters">
-    <button class="on" onclick="setFilter(this,'all')">全部</button>
+    <button class="on" onclick="setFilter(this,'all')">全部留言</button>
     <button onclick="setFilter(this,'pending')">待处理</button>
     <button onclick="setFilter(this,'accepted')">已采纳</button>
     <button onclick="setFilter(this,'completed')">已补充</button>
     <button onclick="setFilter(this,'rejected')">已拒绝</button>
+    <button onclick="setFilter(this,'mine')">👤 我提交的书单</button>
   </div>
 
   <div class="msg-list" id="msgList"></div>
-  <div class="footer">窝嘟嘟 · 仅提供链接索引，不存储文件</div>
+  <div class="footer">窝嘟嘟 · 社区求书板</div>
 </div>
-
-<!-- 右下角悬浮按钮 -->
-<button class="float-btn" onclick="scrollToMsg()">求书留言</button>
 
 <script>
 let curTab='hot';
@@ -331,6 +356,22 @@ let authorsTotal = 0;
 let authorsLimit = 5;
 const defaultShownBooks = 3;
 const expandedAuthors = new Set();
+let cachedMessages = [];
+
+// 大 Tab 切换逻辑
+function switchMainTab(tabName) {
+    document.querySelectorAll('.nav-tab-item').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+
+    if (tabName === 'search') {
+        document.querySelectorAll('.nav-tab-item')[0].classList.add('active');
+        document.getElementById('section-search').classList.add('active');
+    } else {
+        document.querySelectorAll('.nav-tab-item')[1].classList.add('active');
+        document.getElementById('section-request').classList.add('active');
+        loadMsgs();
+    }
+}
 
 async function loadNovels(){
   const q=document.getElementById('q').value.trim();
@@ -382,7 +423,7 @@ function renderAuthorCard(a){
   }
 
   const toggleBtn = books.length > defaultShownBooks ? '<button class="expand-btn" onclick="toggleAuthor(\\''+key+'\\')">'+(isExpanded? '收起':'展开全部书籍（共 '+books.length+' 本）')+'</button>' : '';
-  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div></div>';
+  return '<div class="result-item author-card"><div class="result-head"><span class="result-title">'+esc(a.author)+'</span><span class="result-author">'+(a.count||0)+' 本</span>'+toggleBtn+'</div><div class="result-desc">'+booksHtml+'</div><div class="anti-harmony-tip">⚠️ 防和谐：请先【转存】到自己网盘再下载！</div></div>';
 }
 
 function renderAuthorsPage(page){
@@ -414,7 +455,7 @@ function renderNovel(n){
     const code=l.code?'<code>'+esc(l.code)+'</code>':'';
     return '<a class="page-link" href="'+esc(l.url)+'" target="_blank" rel="noopener">'+esc(l.label)+code+'</a>';
   }).join('');
-  return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div></div>';
+  return '<div class="result-item"><div class="result-head"><span class="result-title">'+esc(n.title)+'</span><span class="result-author">'+(n.author?esc(n.author):'')+'</span><span class="result-tags">'+tags+'</span></div><div class="result-desc">'+esc(n.description||'')+'</div><div class="result-links">'+links+'</div><div class="anti-harmony-tip">⚠️ 防和谐：请先【转存】到自己网盘再下载！</div></div>';
 }
 
 function renderPagination(total,page,limit){
@@ -461,28 +502,57 @@ function doSearch(){
   loadNovels();
 }
 
-function scrollToMsg(){
-  const el = document.getElementById('msgSection');
-  if(el){
-    el.scrollIntoView({behavior:'smooth'});
-    document.getElementById('msgName').focus();
-  }
+function getMyLocalRequests() {
+    return JSON.parse(localStorage.getItem('my_book_requests') || '[]');
 }
 
 async function loadMsgs(){
   const list=document.getElementById('msgList');
   list.innerHTML='<div class="loading">加载中...</div>';
   try{
-    const r=await fetch('/api/messages?status='+curFilter);
+    const r=await fetch('/api/messages');
     const d=await r.json();
-    if(!d.results.length){list.innerHTML='<div class="empty">暂无留言</div>';return}
-    list.innerHTML=d.results.map(m=>{
-      const cmap={pending:'b-pending',accepted:'b-accepted',completed:'b-completed',rejected:'b-rejected'};
-      const labels={pending:'待处理',accepted:'已采纳',completed:'已补充',rejected:'已拒绝'};
-      const date=(m.created_at||'').slice(5,10);
-      return '<div class="msg-item"><div class="msg-info"><div class="msg-name">'+esc(m.novel_name)+'</div>'+(m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':'')+'</div><div class="msg-right"><span class="msg-date">'+date+'</span><span class="badge '+cmap[m.status]+'">'+labels[m.status]+'</span></div></div>';
-    }).join('');
+    cachedMessages = d.results || [];
+    renderMessageList(curFilter);
   }catch(e){list.innerHTML='<div class="empty">加载失败</div>'}
+}
+
+function renderMessageList(filterType) {
+    const list = document.getElementById('msgList');
+    list.innerHTML = '';
+
+    let myIds = getMyLocalRequests();
+    let targetList = cachedMessages;
+
+    if (filterType === 'pending') {
+        targetList = cachedMessages.filter(item => item.status === 'pending');
+    } else if (filterType === 'accepted') {
+        targetList = cachedMessages.filter(item => item.status === 'accepted');
+    } else if (filterType === 'completed') {
+        targetList = cachedMessages.filter(item => item.status === 'completed' || item.status === 'success');
+    } else if (filterType === 'rejected') {
+        targetList = cachedMessages.filter(item => item.status === 'rejected');
+    } else if (filterType === 'mine') {
+        targetList = cachedMessages.filter(item => myIds.includes(item.id));
+        if (targetList.length === 0) {
+            list.innerHTML = '<div class="empty">您当前还没有在本机提交过求书哦~</div>';
+            return;
+        }
+    }
+
+    if (targetList.length === 0) {
+        list.innerHTML = '<div class="empty">暂无相关留言</div>';
+        return;
+    }
+
+    const cmap={pending:'b-pending',accepted:'b-accepted',completed:'b-completed',rejected:'b-rejected',success:'b-completed'};
+    const labels={pending:'待处理',accepted:'已采纳',completed:'已补充',rejected:'已拒绝',success:'已补充'};
+
+    list.innerHTML = targetList.map(m => {
+        const date = (m.created_at || '').slice(5, 10);
+        const statusKey = m.status || 'pending';
+        return '<div class="msg-item"><div class="msg-info"><div class="msg-name">'+esc(m.novel_name)+'</div>'+(m.note?'<div class="msg-note-text">'+esc(m.note)+'</div>':'')+'</div><div class="msg-right"><span class="msg-date">'+date+'</span><span class="badge '+(cmap[statusKey]||'b-pending')+'">'+(labels[statusKey]||'待处理')+'</span></div></div>';
+    }).join('');
 }
 
 async function submitMsg(){
@@ -493,8 +563,16 @@ async function submitMsg(){
     const r=await fetch('/api/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({novel_name:name,note})});
     const d=await r.json();
     if(d.error){alert(d.error);return}
+    
+    if (d.id) {
+        let myIds = getMyLocalRequests();
+        myIds.push(d.id);
+        localStorage.setItem('my_book_requests', JSON.stringify(myIds));
+    }
+
     document.getElementById('msgName').value='';
     document.getElementById('msgNote').value='';
+    alert('提交成功！系统正在加急处理，可在【我提交的书单】中随时查看进度。');
     loadMsgs();
   }catch(e){alert('提交失败，请重试')}
 }
@@ -503,7 +581,7 @@ function setFilter(el,s){
   curFilter=s;
   document.querySelectorAll('#filters button').forEach(b=>b.classList.remove('on'));
   el.classList.add('on');
-  loadMsgs();
+  renderMessageList(s);
 }
 
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -512,7 +590,6 @@ window.addEventListener('load',function(){
   var activeTab=document.querySelector('.tab-btn.active');
   if(activeTab)moveIndicator(activeTab);
   loadNovels();
-  loadMsgs();
 });
 window.addEventListener('resize',function(){
   var activeTab=document.querySelector('.tab-btn.active');
